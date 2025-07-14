@@ -1,16 +1,23 @@
 import psycopg2
 from psycopg2.extensions import ISOLATION_LEVEL_AUTOCOMMIT
-from flask import Flask, render_template_string, session, request, redirect, url_for
+from flask import Flask, render_template_string, session, request, redirect, url_for, render_template
 from chessdotcom import get_player_stats, Client
 from flask_sqlalchemy import SQLAlchemy
 import os
 from datetime import datetime, timezone
 from werkzeug.security import generate_password_hash, check_password_hash
 
+#for test
+import plotly
+import plotly.express as px
+import pandas as pd
+import json
+
 DB_NAME = "test_db"
 DB_USER = "postgres"
 DB_HOST = "localhost"
 DB_PORT = "5432"
+
 """
 def create_db_if_not_exists():
     conn = psycopg2.connect(dbname='postgres', user=DB_USER, host=DB_HOST, port=DB_PORT)
@@ -25,6 +32,7 @@ def create_db_if_not_exists():
 
 create_db_if_not_exists()
 """
+
 LOCAL = False
 
 app = Flask(__name__)
@@ -73,13 +81,22 @@ def show_latest_elo():
     if not latest:
         elo = fetch_and_save_elo()
         return f"No previous data. Elo fetched and saved: {elo}"
-    return render_template_string('''
-        <h1>Latest ELO</h1>
-        <p>{{ username }} : {{ elo }} ({{ timestamp }})</p>
-        <form action="/update" method="post">
-            <button type="submit">Update ELO</button>
-        </form>
-    ''', username=latest.username, elo=latest.elo, timestamp=latest.timestamp)
+
+    df = pd.DataFrame({
+        "Fruit": ["Apples", "Oranges", "Bananas", "Apples", "Oranges", "Bananas"],
+        "Amount": [4, 1, 2, 2, 4, 5],
+        "City": ["SF", "SF", "SF", "Montreal", "Montreal", "Montreal"]
+    })
+    fig = px.bar(df, x="Fruit", y ="Amount", color ="City", barmode ="group")
+    loic_coin_graph = json.dumps(fig, cls=plotly.utils.PlotlyJSONEncoder)
+    return render_template('home.html', elo_rapid=latest.elo, username=session["username"], loic_coin_graph=loic_coin_graph)
+    # return render_template_string('''
+    #     <h1>Latest ELO</h1>
+    #     <p>{{ username }} : {{ elo }} ({{ timestamp }})</p>
+    #     <form action="/update" method="post">
+    #         <button type="submit">Update ELO</button>
+    #     </form>
+    # ''', username=latest.username, elo=latest.elo, timestamp=latest.timestamp)
 
 @app.route('/')
 def index():
