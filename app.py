@@ -1,14 +1,35 @@
+import psycopg2
+from psycopg2.extensions import ISOLATION_LEVEL_AUTOCOMMIT
 from flask import Flask, render_template_string, session, request, redirect, url_for
 from chessdotcom import get_player_stats, Client
 from flask_sqlalchemy import SQLAlchemy
 import os
 from datetime import datetime, timezone
+from werkzeug.security import generate_password_hash, check_password_hash
 
-LOCAL = True
+DB_NAME = "test_db"
+DB_USER = "postgres"
+DB_HOST = "localhost"
+DB_PORT = "5432"
+"""
+def create_db_if_not_exists():
+    conn = psycopg2.connect(dbname='postgres', user=DB_USER, host=DB_HOST, port=DB_PORT)
+    conn.set_isolation_level(ISOLATION_LEVEL_AUTOCOMMIT)
+    cur = conn.cursor()
+    cur.execute(f"SELECT 1 FROM pg_database WHERE datname='{DB_NAME}'")
+    exists = cur.fetchone()
+    if not exists:
+        cur.execute(f'CREATE DATABASE "{DB_NAME}"')
+    cur.close()
+    conn.close()
+
+create_db_if_not_exists()
+"""
+LOCAL = False
 
 app = Flask(__name__)
 if LOCAL:
-    app.config['SQLALCHEMY_DATABASE_URI'] = "postgresql://postgres@localhost:5432/test_db"
+    app.config['SQLALCHEMY_DATABASE_URI'] = f"postgresql://{DB_USER}@{DB_HOST}:{DB_PORT}/{DB_NAME}"
 else:
     app.config['SQLALCHEMY_DATABASE_URI'] = os.environ.get("DATABASE_URL")
 db = SQLAlchemy(app)
@@ -21,6 +42,18 @@ class EloHistory(db.Model):
     elo = db.Column(db.Integer, nullable=False)
     timestamp = db.Column(db.DateTime, default=datetime.now(timezone.utc))
 
+class User(db.Model):
+    __tablename__ = 'users'
+    id = db.Column(db.Integer, primary_key=True)
+    username = db.Column(db.String(80), unique=True, nullable=False)
+    password_hash = db.Column(db.String(512), nullable=False)
+
+    def set_password(self, password):
+        self.password_hash = generate_password_hash(password)
+
+    def check_password(self, password):
+        return check_password_hash(self.password_hash, password)
+
 with app.app_context():
     db.create_all()
 
@@ -32,19 +65,19 @@ def fetch_and_save_elo(username="Lo_Chx"):
     new_entry = EloHistory(username=username, elo=elo_rapid)
     db.session.add(new_entry)
     db.session.commit()
-    return f"ELO mis à jour : {elo_rapid} <br><a href='/'>Retour</a>"
+    return f"ELO updated: {elo_rapid} <br><a href='/'>Back</a>"
 
 @app.route('/elo')
 def show_latest_elo():
     latest = EloHistory.query.order_by(EloHistory.timestamp.desc()).first()
     if not latest:
         elo = fetch_and_save_elo()
-        return f"Pas de données précédentes. Elo récupéré et stocké : {elo}"
-    return  render_template_string('''
-        <h1>Dernier ELO</h1>
+        return f"No previous data. Elo fetched and saved: {elo}"
+    return render_template_string('''
+        <h1>Latest ELO</h1>
         <p>{{ username }} : {{ elo }} ({{ timestamp }})</p>
         <form action="/update" method="post">
-            <button type="submit">Mettre à jour l'ELO</button>
+            <button type="submit">Update ELO</button>
         </form>
     ''', username=latest.username, elo=latest.elo, timestamp=latest.timestamp)
 
@@ -52,34 +85,61 @@ def show_latest_elo():
 def index():
     if 'username' in session:
         return f'''
-            Connecté en tant que {session["username"]} <br>
-            <a href="/elo">Voir ELO</a><br>
+            Logged in as {session["username"]} <br>
+            <a href="/elo">View ELO</a><br>
             <a href="/logout">Logout</a>
         '''
     return '''
-        Vous n'êtes pas connecté.<br>
-        <a href="/login"><button>Se connecter</button></a>
+        You are not logged in.<br>
+        <a href="/login"><button>Log in</button></a>
+        <a href="/register"><button>Sign up</button></a>
     '''
 
 @app.route('/login', methods=['GET', 'POST'])
 def login():
     if request.method == 'POST':
-        session['username'] = request.form['username']
-        return redirect(url_for('index'))
-    return '''
+        user = User.query.filter_by(username=request.form['username']).first()
+        if user and user.check_password(request.form['password']):
+            session['username'] = user.username
+            return redirect(url_for('index'))
+        return 'Incorrect username or password.'
+    return render_template_string('''
+        <h2>Login</h2>
         <form method="post">
-            <p><input type=text name=username>
-            <p><input type=submit value=Login>
+            <p><input type="text" name="username" placeholder="Username" required></p>
+            <p><input type="password" name="password" placeholder="Password" required></p>
+            <p><input type="submit" value="Log in"></p>
         </form>
-    '''
+        <p><a href="/register">No account? Sign up</a></p>
+    ''')
+
+@app.route('/register', methods=['GET', 'POST'])
+def register():
+    if request.method == 'POST':
+        username = request.form['username']
+        password = request.form['password']
+        if User.query.filter_by(username=username).first():
+            return 'Username already taken.'
+        new_user = User(username=username)
+        new_user.set_password(password)
+        db.session.add(new_user)
+        db.session.commit()
+        session['username'] = username
+        return redirect(url_for('index'))
+    return render_template_string('''
+        <h2>Create an account</h2>
+        <form method="post">
+            <p><input type="text" name="username" placeholder="Username" required></p>
+            <p><input type="password" name="password" placeholder="Password" required></p>
+            <p><input type="submit" value="Sign up"></p>
+        </form>
+        <p><a href="/login">Already have an account? Log in</a></p>
+    ''')
 
 @app.route('/logout')
 def logout():
-    # remove the username from the session if it's there
     session.pop('username', None)
     return redirect(url_for('index'))
 
 if __name__ == '__main__':
-    app.run()
-
-
+    app.run(debug=True)
