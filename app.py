@@ -2,22 +2,22 @@ from flask import Flask, render_template_string
 from chessdotcom import get_player_stats, Client
 from flask_sqlalchemy import SQLAlchemy
 import os
-from datetime import datetime
+from datetime import datetime, timezone
 
 LOCAL = False
 
 app = Flask(__name__)
-if not LOCAL:
-    app.config['SQLALCHEMY_DATABASE_URI'] = os.environ.get("DATABASE_URL")
-else:
+if LOCAL:
     app.config['SQLALCHEMY_DATABASE_URI'] = "postgresql://postgres@localhost:5432/test_db"
+else:
+    app.config['SQLALCHEMY_DATABASE_URI'] = os.environ.get("DATABASE_URL")
 db = SQLAlchemy(app)
 
 class EloHistory(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     username = db.Column(db.String(80), nullable=False)
     elo = db.Column(db.Integer, nullable=False)
-    timestamp = db.Column(db.DateTime, default=datetime.utcnow)
+    timestamp = db.Column(db.DateTime, default=datetime.now(timezone.utc))
 
 with app.app_context():
     db.create_all()
