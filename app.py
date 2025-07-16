@@ -83,6 +83,7 @@ class User(db.Model):
         return check_password_hash(self.password_hash, password)
 
 with app.app_context():
+    # db.drop_all()
     db.create_all()
 
 @app.route('/update', methods=['POST'])
@@ -140,15 +141,18 @@ def login():
             session['username'] = user.username
             return redirect(url_for('index'))
         return 'Incorrect username or password.'
-    return render_template_string('''
-        <h2>Login</h2>
-        <form method="post">
-            <p><input type="text" name="username" placeholder="Username" required></p>
-            <p><input type="password" name="password" placeholder="Password" required></p>
-            <p><input type="submit" value="Log in"></p>
-        </form>
-        <p><a href="/register">No account? Sign up</a></p>
-    ''')
+    return render_template(
+        'login.html'
+    )
+    # return render_template_string('''
+    #     <h2>Login</h2>
+    #     <form method="post">
+    #         <p><input type="text" name="username" placeholder="Username" required></p>
+    #         <p><input type="password" name="password" placeholder="Password" required></p>
+    #         <p><input type="submit" value="Log in"></p>
+    #     </form>
+    #     <p><a href="/register">No account? Sign up</a></p>
+    # ''')
 
 @app.route('/register', methods=['GET', 'POST'])
 def register():
@@ -157,7 +161,7 @@ def register():
         password = request.form['password']
         if User.query.filter_by(username=username).first():
             return 'Username already taken.'
-        new_user = User(username=username)
+        new_user = User(username=username, available_funds=1000)
         new_user.set_password(password)
         db.session.add(new_user)
         db.session.commit()
