@@ -33,7 +33,7 @@ def create_db_if_not_exists():
 create_db_if_not_exists()
 """
 
-LOCAL = False
+LOCAL = True
 
 app = Flask(__name__)
 if LOCAL:
@@ -45,16 +45,36 @@ db = SQLAlchemy(app)
 app.secret_key = b'_5#y2L"F4ZQ8z\n\xec]/'
 
 class EloHistory(db.Model):
+    __tablename__ = 'elo_history'
     id = db.Column(db.Integer, primary_key=True)
     username = db.Column(db.String(80), nullable=False)
     elo = db.Column(db.Integer, nullable=False)
     timestamp = db.Column(db.DateTime, default=datetime.now(timezone.utc))
+
+class Position(db.Model):
+    __tablename__ = 'positions'
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)
+    asset = db.Column(db.String(10), nullable=False)
+    quantity = db.Column(db.Float, nullable=False)  # positive = long, negative = short
+    entry_price = db.Column(db.Float, nullable=False)
+    #timestamp = db.Column(db.DateTime, default=datetime.now(timezone.utc))
+    user = db.relationship('User', back_populates='open_positions')
 
 class User(db.Model):
     __tablename__ = 'users'
     id = db.Column(db.Integer, primary_key=True)
     username = db.Column(db.String(80), unique=True, nullable=False)
     password_hash = db.Column(db.String(512), nullable=False)
+    
+    available_funds = db.Column(db.Integer, nullable=False)
+    open_positions = db.relationship('Position', back_populates='user', cascade='all, delete-orphan')
+    #open_positions  = # list of open positions
+    #position : [asset, entry price, position size (capital_at_risk ), direction (long/short) pas necessaire si c le 
+    #   signe de position size, le timestamp?]
+    #not needed : portfolio_value = available_funds + get_profit(open_positions)
+    #accéder à toutes les positions ouvertes d’un user avec :
+    #   user.open_positions
 
     def set_password(self, password):
         self.password_hash = generate_password_hash(password)
