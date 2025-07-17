@@ -222,7 +222,7 @@ def register():
         db.session.add(new_user)
         db.session.commit()
         session['username'] = username
-        return redirect(url_for('index'))
+        return redirect(url_for('home'))
     return render_template(
         'register.html'
     )
@@ -239,7 +239,7 @@ def register():
 @app.route('/logout')
 def logout():
     session.pop('username', None)
-    return redirect(url_for('index'))
+    return redirect(url_for('login'))
 
 if __name__ == "__main__":
     app.run(debug=True, use_reloader=False)
