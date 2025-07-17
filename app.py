@@ -33,7 +33,7 @@ def create_db_if_not_exists():
 create_db_if_not_exists()
 """
 
-LOCAL = True
+LOCAL = False
 
 app = Flask(__name__)
 if LOCAL:
