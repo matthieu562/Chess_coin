@@ -33,7 +33,7 @@ def create_db_if_not_exists():
 create_db_if_not_exists()
 """
 
-LOCAL = True
+LOCAL = False
 
 app = Flask(__name__)
 if LOCAL:
@@ -164,7 +164,8 @@ def show_latest_elo():
     })
     fig = px.bar(df, x="Fruit", y ="Amount", color ="City", barmode ="group")
     loic_coin_graph = json.dumps(fig, cls=plotly.utils.PlotlyJSONEncoder)
-    return render_template('home.html', elo_rapid=latest.elo, username=session["username"], loic_coin_graph=loic_coin_graph)
+    username = session.get('username')
+    return render_template('home.html', elo_rapid=latest.elo, username=username, loic_coin_graph=loic_coin_graph)
     # return render_template_string('''
     #     <h1>Latest ELO</h1>
     #     <p>{{ username }} : {{ elo }} ({{ timestamp }})</p>
@@ -174,18 +175,19 @@ def show_latest_elo():
     # ''', username=latest.username, elo=latest.elo, timestamp=latest.timestamp)
 
 @app.route('/')
-def index():
-    if 'username' in session:
-        return f'''
-            Logged in as {session["username"]} <br>
-            <a href="/elo">View ELO</a><br>
-            <a href="/logout">Logout</a>
-        '''
-    return '''
-        You are not logged in.<br>
-        <a href="/login"><button>Log in</button></a>
-        <a href="/register"><button>Sign up</button></a>
-    '''
+def home():
+    return redirect(url_for('show_latest_elo'))
+    # if 'username' in session:
+    #     return f'''
+    #         Logged in as {session["username"]} <br>
+    #         <a href="/elo">View ELO</a><br>
+    #         <a href="/logout">Logout</a>
+    #     '''
+    # return '''
+    #     You are not logged in.<br>
+    #     <a href="/login"><button>Log in</button></a>
+    #     <a href="/register"><button>Sign up</button></a>
+    # '''
 
 @app.route('/login', methods=['GET', 'POST'])
 def login():
@@ -193,17 +195,20 @@ def login():
         user = User.query.filter_by(username=request.form['username']).first()
         if user and user.check_password(request.form['password']):
             session['username'] = user.username
-            return redirect(url_for('index'))
+            return redirect(url_for('home'))
         return 'Incorrect username or password.'
-    return render_template_string('''
-        <h2>Login</h2>
-        <form method="post">
-            <p><input type="text" name="username" placeholder="Username" required></p>
-            <p><input type="password" name="password" placeholder="Password" required></p>
-            <p><input type="submit" value="Log in"></p>
-        </form>
-        <p><a href="/register">No account? Sign up</a></p>
-    ''')
+    return render_template(
+        'login.html'
+    )
+    # return render_template_string('''
+    #     <h2>Login</h2>
+    #     <form method="post">
+    #         <p><input type="text" name="username" placeholder="Username" required></p>
+    #         <p><input type="password" name="password" placeholder="Password" required></p>
+    #         <p><input type="submit" value="Log in"></p>
+    #     </form>
+    #     <p><a href="/register">No account? Sign up</a></p>
+    # ''')
 
 @app.route('/register', methods=['GET', 'POST'])
 def register():
@@ -218,15 +223,18 @@ def register():
         db.session.commit()
         session['username'] = username
         return redirect(url_for('index'))
-    return render_template_string('''
-        <h2>Create an account</h2>
-        <form method="post">
-            <p><input type="text" name="username" placeholder="Username" required></p>
-            <p><input type="password" name="password" placeholder="Password" required></p>
-            <p><input type="submit" value="Sign up"></p>
-        </form>
-        <p><a href="/login">Already have an account? Log in</a></p>
-    ''')
+    return render_template(
+        'register.html'
+    )
+    # return render_template_string('''
+    #     <h2>Create an account</h2>
+    #     <form method="post">
+    #         <p><input type="text" name="username" placeholder="Username" required></p>
+    #         <p><input type="password" name="password" placeholder="Password" required></p>
+    #         <p><input type="submit" value="Sign up"></p>
+    #     </form>
+    #     <p><a href="/login">Already have an account? Log in</a></p>
+    # ''')
 
 @app.route('/logout')
 def logout():
