@@ -1,0 +1,34 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8" />
+    <title>Leaderboard</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@4.6.0/dist/css/bootstrap.min.css" rel="stylesheet" />
+</head>
+<body class="p-4">
+
+    <h2 class="mb-4">Top 10 sorted by Equity</h2>
+
+    <table class="table table-striped table-bordered">
+        <thead class="thead-dark">
+            <tr>
+                <th>Nom du user</th>
+                <th>Equity</th>
+                <th>Quantity Loïc_coin</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for player in leaderboard %}
+            <tr>
+                <td>{{ player.username }}</td>
+                <td>{{ "%.2f"|format(player.equity) }}</td>
+                <td>{{ "%.2f"|format(player.loic_coin_qty) }}</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+
+    <a href="{{ url_for('home') }}">Back to home</a>
+
+</body>
+</html>

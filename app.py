@@ -6,6 +6,7 @@ from flask_sqlalchemy import SQLAlchemy
 import os
 from datetime import datetime, timezone
 from werkzeug.security import generate_password_hash, check_password_hash
+from datetime import datetime, timedelta
 
 #for test
 import plotly
@@ -52,6 +53,47 @@ class EloHistory(db.Model):
     elo = db.Column(db.Integer, nullable=False)
     timestamp = db.Column(db.DateTime, default=datetime.now(timezone.utc))
 
+    @staticmethod
+    def get_current_elo(asset): # Pour gérer les positions sans mettre forcément dans le graphic
+        Client.request_config['headers']['User-Agent'] = 'my-app'
+        chess_com_tag = EloHistory.query.filter_by(asset=asset).first().chess_com_tag
+        stats = get_player_stats(chess_com_tag).json
+        elo_rapid = stats['stats']['chess_rapid']['last']['rating']
+        # elo_rapid = 500
+        return elo_rapid
+
+    @staticmethod
+    def update_assets():
+        assets = EloHistory.get_all_assets_name()
+        
+        for asset in assets:
+            current_elo = EloHistory.get_current_elo(asset)
+            
+            latest_elo_entry = db.session.query(EloHistory).filter_by(asset=asset).order_by(EloHistory.timestamp.desc()).first()
+            if latest_elo_entry:
+                latest_timestamp = latest_elo_entry.timestamp
+                if latest_timestamp.tzinfo is None:
+                    latest_timestamp = latest_timestamp.replace(tzinfo=timezone.utc)  # Ajouter le fuseau horaire UTC si nécessaire
+                time_difference = datetime.now(timezone.utc) - latest_timestamp
+                if time_difference < timedelta(hours=6):
+                    latest_elo_entry.elo = current_elo
+                    latest_elo_entry.timestamp = datetime.now(timezone.utc)
+                    db.session.commit()
+                else:
+                    new_entry = EloHistory(elo=current_elo, asset=asset, timestamp=datetime.now(timezone.utc))
+                    db.session.add(new_entry)
+                    db.session.commit()
+            else:
+                new_entry = EloHistory(elo=current_elo, asset=asset, timestamp=datetime.now(timezone.utc))
+                db.session.add(new_entry)
+                db.session.commit()
+    
+    @staticmethod
+    def get_all_assets_name():
+        assets = db.session.query(EloHistory.asset).distinct().all() # Récupérer tous les noms des assets une fois
+        assets = [a[0] for a in assets]  # extraire les noms depuis les tuples
+        return assets
+
 class Position(db.Model):
     __tablename__ = 'positions'
     id = db.Column(db.Integer, primary_key=True)
@@ -61,6 +103,12 @@ class Position(db.Model):
     entry_price = db.Column(db.Float, nullable=False)
     #timestamp = db.Column(db.DateTime, default=datetime.now(timezone.utc))
     user = db.relationship('User', back_populates='open_positions')
+
+    def get_position_value(self):
+        current_elo = EloHistory.get_current_elo(self.asset)
+        position_value = abs(self.quantity) * current_elo
+        print(f"Position value: {position_value}")
+        return position_value
 
 class User(db.Model):
     __tablename__ = 'users'
@@ -77,7 +125,50 @@ class User(db.Model):
     #accéder à toutes les positions ouvertes d’un user avec :
     #   user.open_positions
 
-    #get_equity()
+    def open_position(self):
+        asset = request.form['asset']
+        latest_elo = EloHistory.query.filter_by(asset=asset).order_by(EloHistory.timestamp.desc()).first()
+        # Check 'quantity' -> allowed value ? : not 0?, not too much value than available_funds permits?, is a float? 
+        try:
+            quantity = float(request.form['quantity']) 
+            if quantity == 0:
+                raise ValueError("Quantity can't be zero")
+            if self is None:
+                raise ValueError("User not found")
+            max_quantity = self.available_funds / latest_elo.elo
+            if abs(quantity) > max_quantity:
+                raise ValueError("Not enough funds")
+        except (ValueError, TypeError) as e:
+            return f"Invalid quantity: {e} <br><a href='/trade'>Back</a>"
+        
+        self.available_funds -= abs(quantity) * latest_elo.elo
+        new_position = Position(user_id=self.id, asset=asset, quantity=quantity, entry_price=latest_elo.elo)
+        db.session.add(new_position)
+        db.session.commit()
+
+        # Save data temporary
+        # session['last_order'] = {
+        #     'asset': asset,
+        #     'quantity': quantity
+        # }
+
+        return 0
+
+    def close_position(self, position_id):
+        position = Position.query.filter_by(id=position_id, user_id=self.id).first()
+        self.available_funds += position.get_position_value()
+
+        db.session.delete(position)
+        db.session.commit()
+
+    def get_equity(self):
+        positions = Position.query.filter_by(user_id=self.id)
+
+        position_values = 0
+        for position in positions:
+            position_values += position.get_position_value()
+
+        return self.available_funds + position_values
 
     def set_password(self, password):
         self.password_hash = generate_password_hash(password)
@@ -89,83 +180,138 @@ with app.app_context():
     #db.drop_all()
     db.create_all()
 
-@app.route('/update', methods=['POST'])
-def fetch_and_save_elo(chess_com_tag="Lo_Chx"):
-    # all assets should be updated here
-    Client.request_config['headers']['User-Agent'] = 'my-app'
-    stats = get_player_stats(chess_com_tag).json
-    elo_rapid = stats['stats']['chess_rapid']['last']['rating']
-    # elo_rapid = 487
-    new_entry = EloHistory(elo=elo_rapid)
-    db.session.add(new_entry)
-    db.session.commit()
-    return f"ELO updated: {elo_rapid} <br><a href='/'>Back</a>"
+# @app.route('/update', methods=['GET'])
+# def update_db():
+#     EloHistory.update_assets()
+#     return "end"
 
-@app.route('/test', methods=['GET', 'POST'])
-def test():
+# @app.route('/eq', methods=['GET'])
+# def eq():
+#     user = User.query.filter_by(username=session['username']).first()
+#     print("User funds :", user.available_funds, "User equity :", user.get_equity())
+#     return "end"
+
+@app.route('/leaderboard')
+def leaderboard():
+    # Récupérer tous les users
+    users = User.query.all()
+
+    leaderboard_data = []
+    for user in users:
+        equity = user.get_equity()
+
+        # Chercher la quantité de Loïc_coin dans ses positions ouvertes
+        loic_coin_qty = 0
+        for pos in user.open_positions:
+            if pos.asset == 'Loïc_coin':
+                loic_coin_qty += pos.quantity
+
+        leaderboard_data.append({
+            'username': user.username,
+            'equity': equity,
+            'loic_coin_qty': loic_coin_qty
+        })
+
+    # Trier par equity décroissante et prendre les 10 premiers
+    leaderboard_data = sorted(leaderboard_data, key=lambda x: x['equity'], reverse=True)[:10]
+
+    return render_template('leaderboard.html', leaderboard=leaderboard_data)
+
+@app.route('/trade', methods=['GET', 'POST'])
+def trade():
     if 'username' not in session:
         return redirect(url_for('login'))
 
     user = User.query.filter_by(username=session['username']).first()
 
-    assets = db.session.query(EloHistory.asset).distinct().all()
-    assets = [a[0] for a in assets]  # extraire les noms depuis les tuples
+    # When accessing the page, always update the value in the table :
+    EloHistory.update_assets()
+
+    # Actualiser les valeurs si demandé par ?update=1
+    if request.method == 'GET' and request.args.get('update') == '1':
+        EloHistory.update_assets()
+
+    assets = EloHistory.get_all_assets_name()
+
+    # Construire la liste assets_values avec valeur actuelle
+    assets_values = []
+    for asset in assets:
+        latest_elo_entry = EloHistory.query.filter_by(asset=asset).order_by(EloHistory.timestamp.desc()).first()
+        value = latest_elo_entry.elo if latest_elo_entry else 0
+        assets_values.append({'asset': asset, 'value': value})
 
     if request.method == 'POST':
-        asset = request.form['asset']
-        latest_elo = EloHistory.query.filter_by(asset=asset).order_by(EloHistory.timestamp.desc()).first()
-        # Check 'quantity' -> allowed value ? : not 0?, not too much value than available_funds permits?, is a float? 
-        try:
-            quantity = float(request.form['quantity']) 
-            if quantity == 0:
-                raise ValueError("Quantity can't be zero")
-            if user is None:
-                raise ValueError("User not found")
-            max_quantity = user.available_funds / latest_elo.elo
-            if abs(quantity) > max_quantity:
-                raise ValueError("Not enough funds")
-        except (ValueError, TypeError) as e:
-            return f"Invalid quantity: {e} <br><a href='/test'>Back</a>"
+        if request.form.get('open_position') == '1':
+            error = user.open_position()
+            if error:
+                return error
+            else:
+                #last_order = session.get('last_order', None)
+                return redirect(url_for('trade'))  # recharger proprement
+        if request.form.get('close_position') == '1':
+            position_id = request.form.get('position_id')
+            user.close_position(position_id)
+            return redirect(url_for('trade'))
 
-        
-        user.available_funds -= abs(quantity) * latest_elo.elo
-        new_position = Position(user_id=user.id, asset=asset, quantity=quantity, entry_price=latest_elo.elo)
-        db.session.add(new_position)
-        db.session.commit()
 
-        return f"Position opened: {quantity} {asset} <br><a href='/'>Back</a>" # Préciser le prix courant et le montant total ?
+    # Préparer les positions
+    positions = []
+    for pos in user.open_positions:
+        latest_elo_entry = EloHistory.query.filter_by(asset=pos.asset).order_by(EloHistory.timestamp.desc()).first()
+        current_elo = latest_elo_entry.elo if latest_elo_entry else 0
+        position_value = abs(pos.quantity) * current_elo
+        positions.append({
+            'id': pos.id,
+            'asset': pos.asset,
+            'quantity': pos.quantity,
+            'entry_price': pos.entry_price,
+            'position_value': position_value
+        })
 
-    return render_template_string('''
-        <h2>Open a Position</h2>
-        <form method="post">
-            <label for="asset">Choose an asset:</label><br>
-            <select name="asset" required>
-                {% for asset in assets %}
-                    <option value="{{ asset }}">{{ asset }}</option>
-                {% endfor %}
-            </select><br><br>
-            <input type="number" step="any" name="quantity" placeholder="Quantity (e.g. 1.5)" required><br>
-            <input type="submit" value="Open Position">
-        </form>
-        <br><a href="/">Back</a>
-    ''', assets=assets)
+    available_funds = user.available_funds
+
+    return render_template('trade_and_positions.html',
+                           assets=assets,
+                           assets_values=assets_values,
+                           positions=positions,
+                           available_funds=available_funds)
+
+# Ne foncitonne pas
+@app.route('/force/<int:value>', methods=['GET'])
+def force_value(value):
+    """Force un nouvel ELO pour un asset donné"""
+    new_entry = EloHistory(asset="Loïc_coin", elo=value)
+    db.session.add(new_entry)
+    db.session.commit()
+    return redirect(url_for('trade'))
 
 @app.route('/elo')
 def show_latest_elo():
-    latest = EloHistory.query.order_by(EloHistory.timestamp.desc()).first()
-    if not latest:
-        fetch_and_save_elo()
-        return render_template('home.html', elo_rapid=latest.elo, username=session["username"], loic_coin_graph=loic_coin_graph)
+    # Récupération de toutes les entrées ELO
+    all_elo_entries = EloHistory.query.order_by(EloHistory.timestamp.asc()).all()
 
-    df = pd.DataFrame({
-        "Fruit": ["Apples", "Oranges", "Bananas", "Apples", "Oranges", "Bananas"],
-        "Amount": [4, 1, 2, 2, 4, 5],
-        "City": ["SF", "SF", "SF", "Montreal", "Montreal", "Montreal"]
-    })
-    fig = px.bar(df, x="Fruit", y ="Amount", color ="City", barmode ="group")
-    loic_coin_graph = json.dumps(fig, cls=plotly.utils.PlotlyJSONEncoder)
+    if not all_elo_entries:
+        return "Aucune donnée ELO en base. <a href='/force/Loïc_coin/1000'>Ajouter une valeur</a>"
+
+    # Préparer les données dans un DataFrame
+    data = [{
+        'timestamp': entry.timestamp,
+        'elo': entry.elo,
+        'asset': entry.asset
+    } for entry in all_elo_entries]
+
+    df = pd.DataFrame(data)
+
+    # Tracer un graphique avec une courbe par asset
+    fig = px.line(df, x='timestamp', y='elo', color='asset', title='History of ELO values over time')
+    elo_graph = json.dumps(fig, cls=plotly.utils.PlotlyJSONEncoder)
+
+    loic_latest = next((entry for entry in reversed(all_elo_entries) if entry.asset == "Loïc_coin"), None)
+    elo_rapid = loic_latest.elo if loic_latest else None
+
     username = session.get('username')
-    return render_template('home.html', elo_rapid=latest.elo, username=username, loic_coin_graph=loic_coin_graph)
+    return render_template('home.html', elo_rapid=elo_rapid, loic_coin_graph=elo_graph, username=username)
+
     # return render_template_string('''
     #     <h1>Latest ELO</h1>
     #     <p>{{ username }} : {{ elo }} ({{ timestamp }})</p>
