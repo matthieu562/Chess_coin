@@ -14,10 +14,6 @@ import plotly.express as px
 import pandas as pd
 import json
 
-DB_NAME = "test_db"
-DB_USER = "postgres"
-DB_HOST = "localhost"
-DB_PORT = "5432"
 
 """
 def create_db_if_not_exists():
@@ -34,16 +30,16 @@ def create_db_if_not_exists():
 create_db_if_not_exists()
 """
 
-LOCAL = False
+SQLALCHEMY_DATABASE_URI = os.environ.get("DATABASE_URL")
+SECRET_KEY = os.environ.get("SECRET_KEY")
 
 app = Flask(__name__)
-if LOCAL:
-    app.config['SQLALCHEMY_DATABASE_URI'] = f"postgresql://{DB_USER}@{DB_HOST}:{DB_PORT}/{DB_NAME}"
-else:
-    app.config['SQLALCHEMY_DATABASE_URI'] = os.environ.get("DATABASE_URL")
+app.secret_key = SECRET_KEY
+print(SQLALCHEMY_DATABASE_URI)
+app.config['SQLALCHEMY_DATABASE_URI'] = SQLALCHEMY_DATABASE_URI
+
 db = SQLAlchemy(app)
 
-app.secret_key = b'_5#y2L"F4ZQ8z\n\xec]/'
 
 class EloHistory(db.Model):
     __tablename__ = 'elo_history'
@@ -177,7 +173,7 @@ class User(db.Model):
         return check_password_hash(self.password_hash, password)
 
 with app.app_context():
-    #db.drop_all()
+    # db.drop_all()
     db.create_all()
 
 # @app.route('/update', methods=['GET'])
