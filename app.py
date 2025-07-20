@@ -1,7 +1,7 @@
 import psycopg2
 from psycopg2.extensions import ISOLATION_LEVEL_AUTOCOMMIT
 from flask import Flask, render_template_string, session, request, redirect, url_for, render_template
-from chessdotcom import get_player_stats, Client
+from chessdotcom import get_player_stats, Client, get_player_game_archives, get_player_games_by_month
 from flask_sqlalchemy import SQLAlchemy
 import os
 from datetime import datetime, timezone
@@ -11,9 +11,14 @@ from datetime import datetime, timedelta
 #for test
 import plotly
 import plotly.express as px
+import pytz
 import pandas as pd
 import json
-
+from bokeh.plotting import figure
+from bokeh.embed import components
+from bokeh.models import HoverTool, Legend, LegendItem, ColumnDataSource
+from bokeh.layouts import row
+from bokeh.resources import CDN
 
 """
 def create_db_if_not_exists():
@@ -32,10 +37,10 @@ create_db_if_not_exists()
 
 SQLALCHEMY_DATABASE_URI = os.environ.get("DATABASE_URL")
 SECRET_KEY = os.environ.get("SECRET_KEY")
-
+# SQLALCHEMY_DATABASE_URI = "postgresql://postgres@localhost:5432/test_db"
+# SECRET_KEY =  "5#y2LF4ZQ8&sefc7"
 app = Flask(__name__)
 app.secret_key = SECRET_KEY
-print(SQLALCHEMY_DATABASE_URI)
 app.config['SQLALCHEMY_DATABASE_URI'] = SQLALCHEMY_DATABASE_URI
 
 db = SQLAlchemy(app)
@@ -284,29 +289,107 @@ def force_value(value):
 @app.route('/elo')
 def show_latest_elo():
     # Récupération de toutes les entrées ELO
-    all_elo_entries = EloHistory.query.order_by(EloHistory.timestamp.asc()).all()
+    # all_elo_entries = EloHistory.query.order_by(EloHistory.timestamp.asc()).all()
 
-    if not all_elo_entries:
-        return "Aucune donnée ELO en base. <a href='/force/Loïc_coin/1000'>Ajouter une valeur</a>"
+    # if not all_elo_entries:
+    #     return "Aucune donnée ELO en base. <a href='/force/Loïc_coin/1000'>Ajouter une valeur</a>"
 
     # Préparer les données dans un DataFrame
-    data = [{
-        'timestamp': entry.timestamp,
-        'elo': entry.elo,
-        'asset': entry.asset
-    } for entry in all_elo_entries]
+    Client.request_config['headers']['User-Agent'] = 'my-app'
+    chess_com_tag = "Lo_Chx"
+    games_info = get_player_game_archives(chess_com_tag).json
 
-    df = pd.DataFrame(data)
+    local_tz = pytz.timezone("Europe/Paris")
+
+    elo_evolution = []
+    for archive_url in games_info['archives']:
+
+        parts = archive_url.strip("/").split("/")
+        if len(parts) < 2:
+            print(f"Archive URL invalide : {archive_url}")
+            continue
+
+        year, month = parts[-2], parts[-1]
+        month_games = get_player_games_by_month(chess_com_tag, year, month).json['games']
+
+        for game in month_games:
+            if game["rules"] != "chess" or game["time_class"] != "rapid":
+                continue
+            ts_utc = datetime.fromtimestamp(game.get("end_time", 0), tz=timezone.utc)
+            ts_local = ts_utc.astimezone(local_tz)
+            if chess_com_tag.lower() in game["white"]["username"].lower():
+                rating = game["white"]["rating"]
+            elif chess_com_tag.lower() in game["black"]["username"].lower():
+                rating = game["black"]["rating"]
+            else:
+                continue
+            elo_evolution.append((ts_local, rating))
+
+    # Supprimer les doublons (par timestamp), garder le plus récent
+    seen = {}
+    for t, r in elo_evolution:
+        seen[t] = r
+
+    df = pd.DataFrame(sorted(seen.items()), columns=["Date", "ELO"])
+    df = df[1:]
+    df['Date'] = pd.to_datetime(df['Date'])
+    df['ELO'] = pd.to_numeric(df['ELO'], errors='coerce')
+    # df["Player"] = "Loïc Coin"
+    # return render_template_string(f"Df is empty: {df_clean[['Date', 'ELO']].tail(10)}")
+
+    # data = [{
+    #     'timestamp': entry.timestamp,
+    #     'elo': int(entry.elo),
+    #     'asset': entry.asset
+    # } for entry in all_elo_entries]
+    #
+    # df = pd.DataFrame(data)
+
+    # df["timestamp"] = pd.to_datetime(df["timestamp"])
+    # df["elo"] = pd.to_numeric(df["elo"], errors="coerce")
 
     # Tracer un graphique avec une courbe par asset
-    fig = px.line(df, x='timestamp', y='elo', color='asset', title='History of ELO values over time')
-    elo_graph = json.dumps(fig, cls=plotly.utils.PlotlyJSONEncoder)
+    # fig = px.line(df, x="Date", y="ELO", color="Player", title="History of ELO values over time", markers=True)
+    # elo_graph = json.dumps(fig, cls=plotly.utils.PlotlyJSONEncoder)
 
-    loic_latest = next((entry for entry in reversed(all_elo_entries) if entry.asset == "Loïc_coin"), None)
-    elo_rapid = loic_latest.elo if loic_latest else None
+    # Création du plot Bokeh
+    p = figure(title="History of ELO values over time",
+               x_axis_type='datetime',
+               sizing_mode="stretch_width",
+               height=400,
+               tools="pan,wheel_zoom,box_zoom,reset,save")
+
+    # Ligne + points
+    line = p.line(df['Date'], df['ELO'], line_width=2)
+    p.circle(df['Date'], df['ELO'], size=4, fill_color="black")
+
+    # Légende personnalisée (hors zone du graphe)
+    legend = Legend(items=[("Loïc Coin", [line])])
+    legend.label_text_font_size = "13px"
+    p.add_layout(legend, 'below')  # En dehors à droite
+
+    # Axes labels
+    p.xaxis.axis_label = 'Date'
+    p.yaxis.axis_label = 'ELO'
+
+    # Hover tooltip
+    hover = HoverTool(tooltips=[("Date", "@x{%F %T}"), ("ELO", "@y")],
+                      formatters={'@x': 'datetime'},
+                      mode='vline')
+    p.add_tools(hover)
+
+    # Génération des scripts et div à insérer dans la page HTML
+    script, div = components(p)
+    cdn_js = CDN.js_files[0]
+    cdn_css = CDN.css_files[0] if CDN.css_files else None
+
+    # loic_latest = next((entry for entry in reversed(all_elo_entries) if entry.asset == "Loïc_coin"), None)
+    # elo_rapid = loic_latest.elo if loic_latest else None
+    elo_rapid = df.iloc[-1]["ELO"]
 
     username = session.get('username')
-    return render_template('home.html', elo_rapid=elo_rapid, loic_coin_graph=elo_graph, username=username)
+    return render_template('home.html', elo_rapid=elo_rapid, script=script, div=div, cdn_js=cdn_js, cdn_css=cdn_css, username=username)
+    # return render_template('home.html', elo_rapid=elo_rapid, loic_coin_graph=elo_graph, username=username)
 
     # return render_template_string('''
     #     <h1>Latest ELO</h1>
