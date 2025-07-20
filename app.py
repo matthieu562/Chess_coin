@@ -1,4 +1,4 @@
-from flask import Flask, session, request, redirect, url_for, render_template
+from flask import Flask, session, request, redirect, url_for, render_template, render_template_string
 from chessdotcom import get_player_stats, Client, get_player_game_archives, get_player_games_by_month
 from flask_sqlalchemy import SQLAlchemy
 import os
@@ -207,10 +207,35 @@ def leaderboard():
             'loic_coin_qty': loic_coin_qty
         })
 
-    # Trier par equity décroissante et prendre les 10 premiers
-    leaderboard_data = sorted(leaderboard_data, key=lambda x: x['equity'], reverse=True)[:10]
+    # Trier par equity décroissante
+    leaderboard_data = sorted(leaderboard_data, key=lambda x: x['equity'], reverse=True)
 
-    return render_template('leaderboard.html', leaderboard=leaderboard_data)
+    # Ajouter le classement avec gestion des égalités
+    ranked_leaderboard = []
+    current_rank = 1
+    for index, player in enumerate(leaderboard_data):
+        if index > 0 and player['equity'] == leaderboard_data[index - 1]['equity']:
+            player['rank'] = ranked_leaderboard[-1]['rank']  # même rang que précédent
+        else:
+            player['rank'] = current_rank
+
+        ranked_leaderboard.append(player)
+        current_rank += 1
+
+    # Trier par equity décroissante et prendre les 10 premiers
+    # leaderboard_data = sorted(leaderboard_data, key=lambda x: x['equity'], reverse=True)[:10]
+
+    username = session.get('username')
+    elo_rapid = get_elo_rapid()
+
+    return render_template('leaderboard.html', username=username, elo_rapid=elo_rapid, leaderboard=ranked_leaderboard)
+
+@app.route('/give', methods=['GET', 'POST'])
+def give():
+    user = User.query.filter_by(username=session['username']).first()
+    user.available_funds += 500
+    db.session.commit()
+    return render_template_string('ok')
 
 @app.route('/trade', methods=['GET', 'POST'])
 def trade():
@@ -270,6 +295,16 @@ def trade():
                            assets_values=assets_values,
                            positions=positions,
                            available_funds=available_funds)
+
+
+@app.errorhandler(404)
+def page_not_found(e):
+
+
+    username = session.get('username')
+    elo_rapid = get_elo_rapid()
+
+    return render_template('404.html', username=username, elo_rapid=elo_rapid)
 
 # Ne foncitonne pas
 @app.route('/force/<int:value>', methods=['GET'])
@@ -347,8 +382,7 @@ def show_latest_elo():
     # elo_graph = json.dumps(fig, cls=plotly.utils.PlotlyJSONEncoder)
 
     # Création du plot Bokeh
-    p = figure(title="History of ELO values over time",
-               x_axis_type='datetime',
+    p = figure(x_axis_type='datetime',
                sizing_mode="stretch_width",
                height=400,
                tools="pan,wheel_zoom,box_zoom,reset,save")
@@ -459,6 +493,51 @@ def register():
 def logout():
     session.pop('username', None)
     return redirect(url_for('login'))
+
+
+def get_elo_rapid():
+    # Préparer les données dans un DataFrame
+    Client.request_config['headers']['User-Agent'] = 'my-app'
+    chess_com_tag = "Lo_Chx"
+    games_info = get_player_game_archives(chess_com_tag).json
+
+    local_tz = pytz.timezone("Europe/Paris")
+
+    elo_evolution = []
+    for archive_url in games_info['archives']:
+
+        parts = archive_url.strip("/").split("/")
+        if len(parts) < 2:
+            print(f"Archive URL invalide : {archive_url}")
+            continue
+
+        year, month = parts[-2], parts[-1]
+        month_games = get_player_games_by_month(chess_com_tag, year, month).json['games']
+
+        for game in month_games:
+            if game["rules"] != "chess" or game["time_class"] != "rapid":
+                continue
+            ts_utc = datetime.fromtimestamp(game.get("end_time", 0), tz=timezone.utc)
+            ts_local = ts_utc.astimezone(local_tz)
+            if chess_com_tag.lower() in game["white"]["username"].lower():
+                rating = game["white"]["rating"]
+            elif chess_com_tag.lower() in game["black"]["username"].lower():
+                rating = game["black"]["rating"]
+            else:
+                continue
+            elo_evolution.append((ts_local, rating))
+
+    # Supprimer les doublons (par timestamp), garder le plus récent
+    seen = {}
+    for t, r in elo_evolution:
+        seen[t] = r
+
+    df = pd.DataFrame(sorted(seen.items()), columns=["Date", "ELO"])
+    df = df[1:]
+    df['Date'] = pd.to_datetime(df['Date'])
+    df['ELO'] = pd.to_numeric(df['ELO'], errors='coerce')
+    return df.iloc[-1]["ELO"]
+
 
 if __name__ == "__main__":
     app.run(debug=True, use_reloader=False)
