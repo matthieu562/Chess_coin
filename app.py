@@ -1,23 +1,17 @@
-import psycopg2
-from psycopg2.extensions import ISOLATION_LEVEL_AUTOCOMMIT
-from flask import Flask, render_template_string, session, request, redirect, url_for, render_template
+from flask import Flask, session, request, redirect, url_for, render_template
 from chessdotcom import get_player_stats, Client, get_player_game_archives, get_player_games_by_month
 from flask_sqlalchemy import SQLAlchemy
 import os
-from datetime import datetime, timezone
+from datetime import timezone
 from werkzeug.security import generate_password_hash, check_password_hash
 from datetime import datetime, timedelta
 
-#for test
-import plotly
-import plotly.express as px
 import pytz
 import pandas as pd
 import json
 from bokeh.plotting import figure
 from bokeh.embed import components
-from bokeh.models import HoverTool, Legend, LegendItem, ColumnDataSource
-from bokeh.layouts import row
+from bokeh.models import HoverTool, Legend
 from bokeh.resources import CDN
 
 """
