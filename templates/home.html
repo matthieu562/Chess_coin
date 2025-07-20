@@ -43,7 +43,11 @@
             </a>
 
             <!-- Divider -->
-            <hr class="sidebar-divider my-0">
+            <hr class="sidebar-divider">
+
+            <div class="sidebar-heading">
+                OVERVIEW
+            </div>
 
             <!-- Nav Item - Dashboard -->
             <li class="nav-item active">
@@ -52,8 +56,26 @@
                     <span>Dashboard</span></a>
             </li>
 
+            <li class="nav-item active">
+                <a class="nav-link" href="{{ url_for('leaderboard') }}">
+                    <i class="fa fa-gamepad"></i>
+                    <span>Leaderboard</span></a>
+            </li>
+
             <!-- Divider -->
             <hr class="sidebar-divider">
+
+            {% if username %}
+                <div class="sidebar-heading">
+                    MARKET
+                </div>
+
+                <li class="nav-item active">
+                    <a class="nav-link" href="{{ url_for('trade') }}">
+                        <i class="fa fa-university"></i>
+                        <span>Trade</span></a>
+                </li>
+            {% endif %}
 
             <!--&lt;!&ndash; Heading &ndash;&gt;
             <div class="sidebar-heading">
@@ -489,21 +511,21 @@
                                 <!-- Card Header - Dropdown -->
                                 <div
                                     class="card-header py-3 d-flex flex-row align-items-center justify-content-between">
-                                    <h6 class="m-0 font-weight-bold text-primary"> Asset Overview </h6>
-                                    <div class="dropdown no-arrow">
-                                        <a class="dropdown-toggle" href="#" role="button" id="dropdownMenuLink"
-                                            data-toggle="dropdown" aria-haspopup="true" aria-expanded="false">
-                                            <i class="fas fa-ellipsis-v fa-sm fa-fw text-gray-400"></i>
-                                        </a>
-                                        <div class="dropdown-menu dropdown-menu-right shadow animated--fade-in"
-                                            aria-labelledby="dropdownMenuLink">
-                                            <div class="dropdown-header">Dropdown Header:</div>
-                                            <a class="dropdown-item" href="#">Action</a>
-                                            <a class="dropdown-item" href="#">Another action</a>
-                                            <div class="dropdown-divider"></div>
-                                            <a class="dropdown-item" href="#">Something else here</a>
-                                        </div>
-                                    </div>
+                                    <h6 class="m-0 font-weight-bold text-primary"> History of Loïc Coin over time </h6>
+{#                                    <div class="dropdown no-arrow">#}
+{#                                        <a class="dropdown-toggle" href="#" role="button" id="dropdownMenuLink"#}
+{#                                            data-toggle="dropdown" aria-haspopup="true" aria-expanded="false">#}
+{#                                            <i class="fas fa-ellipsis-v fa-sm fa-fw text-gray-400"></i>#}
+{#                                        </a>#}
+{#                                        <div class="dropdown-menu dropdown-menu-right shadow animated--fade-in"#}
+{#                                            aria-labelledby="dropdownMenuLink">#}
+{#                                            <div class="dropdown-header">Dropdown Header:</div>#}
+{#                                            <a class="dropdown-item" href="#">Action</a>#}
+{#                                            <a class="dropdown-item" href="#">Another action</a>#}
+{#                                            <div class="dropdown-divider"></div>#}
+{#                                            <a class="dropdown-item" href="#">Something else here</a>#}
+{#                                        </div>#}
+{#                                    </div>#}
                                 </div>
                                 <!-- Card Body -->
                                 <div class="card-body">
@@ -793,11 +815,5 @@
     </script>
 
 </body>
-
-{#<script src="https://cdn.plot.ly/plotly-latest.min.js"></script>#}
-{#<script type="text/javascript">#}
-{#    var graphs = {{ loic_coin_graph | safe }};#}
-{#    Plotly.newPlot('chart', graphs.data, graphs.layout);#}
-{#</script>#}
 
 </html>
