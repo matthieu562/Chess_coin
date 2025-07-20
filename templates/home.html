@@ -26,13 +26,13 @@
 
 </head>
 
-<body id="page-top">
+<body id="page-top" class="sidebar-toggled">
 
     <!-- Page Wrapper -->
     <div id="wrapper">
 
         <!-- Sidebar -->
-        <ul class="navbar-nav bg-gradient-primary sidebar sidebar-dark accordion" id="accordionSidebar">
+        <ul class="navbar-nav bg-gradient-primary sidebar sidebar-dark accordion toggled" id="accordionSidebar">
 
             <!-- Sidebar - Brand -->
             <a class="sidebar-brand d-flex align-items-center justify-content-center" href="">
@@ -165,12 +165,12 @@
                 <!-- Topbar -->
                 <nav class="navbar navbar-expand navbar-light bg-white topbar mb-4 static-top shadow">
 
-                    <!--&lt;!&ndash; Sidebar Toggle (Topbar) &ndash;&gt;
+                    <!-- Sidebar Toggle (Topbar) -->
                     <button id="sidebarToggleTop" class="btn btn-link d-md-none rounded-circle mr-3">
                         <i class="fa fa-bars"></i>
                     </button>
 
-                    &lt;!&ndash; Topbar Search &ndash;&gt;
+                    <!--&lt;!&ndash; Topbar Search &ndash;&gt;
                     <form
                         class="d-none d-sm-inline-block form-inline mr-auto ml-md-3 my-2 my-md-0 mw-100 navbar-search">
                         <div class="input-group">
@@ -781,6 +781,16 @@
 
     <!-- Script pour insérer le graphique -->
     {{ script | safe }}
+
+    <script>
+        // Masquer la sidebar par défaut uniquement si écran < 768px
+        window.addEventListener('DOMContentLoaded', function () {
+            if (window.innerWidth < 768) {
+                document.body.classList.add('sidebar-toggled');
+                document.querySelector('.sidebar').classList.add('toggled');
+            }
+        });
+    </script>
 
 </body>
 
