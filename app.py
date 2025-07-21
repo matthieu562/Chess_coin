@@ -1,4 +1,4 @@
-from flask import Flask, session, request, redirect, url_for, render_template, render_template_string
+from flask import Flask, session, request, redirect, url_for, render_template, render_template_string, flash
 from chessdotcom import get_player_stats, Client, get_player_game_archives, get_player_games_by_month
 from flask_sqlalchemy import SQLAlchemy
 import os
@@ -105,7 +105,9 @@ class Position(db.Model):
             position_value = (current_elo / self.entry_price) * (self.quantity * self.entry_price)
         elif(self.quantity < 0):
             position_value = (self.entry_price / current_elo) * (-self.quantity * self.entry_price)
-        print(f"Position value: {position_value}")
+        else:
+            # self.quantity cannot be equal to 0
+            raise ValueError
 
         return position_value
 
