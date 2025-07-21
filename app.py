@@ -1,4 +1,4 @@
-from flask import Flask, session, request, redirect, url_for, render_template, render_template_string
+from flask import Flask, session, request, redirect, url_for, render_template, render_template_string, flash
 from chessdotcom import get_player_stats, Client, get_player_game_archives, get_player_games_by_month
 from flask_sqlalchemy import SQLAlchemy
 import os
@@ -105,7 +105,9 @@ class Position(db.Model):
             position_value = (current_elo / self.entry_price) * (self.quantity * self.entry_price)
         elif(self.quantity < 0):
             position_value = (self.entry_price / current_elo) * (-self.quantity * self.entry_price)
-        print(f"Position value: {position_value}")
+        else:
+            # self.quantity cannot be equal to 0
+            raise ValueError
 
         return position_value
 
@@ -127,9 +129,9 @@ class User(db.Model):
     def open_position(self):
         asset = request.form['asset']
         latest_elo = EloHistory.query.filter_by(asset=asset).order_by(EloHistory.timestamp.desc()).first()
-        # Check 'quantity' -> allowed value ? : not 0?, not too much value than available_funds permits?, is a float? 
+
         try:
-            quantity = float(request.form['quantity']) 
+            quantity = float(request.form['quantity'])
             if quantity == 0:
                 raise ValueError("Quantity can't be zero")
             if self is None:
@@ -139,24 +141,16 @@ class User(db.Model):
                 raise ValueError("Not enough funds")
         except (ValueError, TypeError) as e:
             return f"Invalid quantity: {e} <br><a href='/trade'>Back</a>"
-        
+
         self.available_funds -= abs(quantity) * latest_elo.elo
         new_position = Position(user_id=self.id, asset=asset, quantity=quantity, entry_price=latest_elo.elo)
         db.session.add(new_position)
         db.session.commit()
-
-        # Save data temporary
-        # session['last_order'] = {
-        #     'asset': asset,
-        #     'quantity': quantity
-        # }
-
         return 0
 
     def close_position(self, position_id):
         position = Position.query.filter_by(id=position_id, user_id=self.id).first()
         self.available_funds += position.get_position_value()
-
         db.session.delete(position)
         db.session.commit()
 
@@ -248,16 +242,11 @@ def trade():
 
     user = User.query.filter_by(username=session['username']).first()
 
-    # When accessing the page, always update the value in the table :
+    # Toujours mettre à jour les valeurs
     EloHistory.update_assets()
 
-    # Actualiser les valeurs si demandé par ?update=1
-    if request.method == 'GET' and request.args.get('update') == '1':
-        EloHistory.update_assets()
-
+    # Liste des actifs
     assets = EloHistory.get_all_assets_name()
-
-    # Construire la liste assets_values avec valeur actuelle
     assets_values = []
     for asset in assets:
         latest_elo_entry = EloHistory.query.filter_by(asset=asset).order_by(EloHistory.timestamp.desc()).first()
@@ -266,12 +255,22 @@ def trade():
 
     if request.method == 'POST':
         if request.form.get('open_position') == '1':
+            try:
+                quantity = float(request.form.get('quantity'))
+                if quantity == 0:
+                    flash("Quantity cannot be zero.", "danger")
+                    return redirect(url_for('trade'))
+            except ValueError:
+                flash("Invalid quantity format.", "danger")
+                return redirect(url_for('trade'))
+
             error = user.open_position()
             if error:
-                return error
+                flash(error, "danger")
             else:
-                #last_order = session.get('last_order', None)
-                return redirect(url_for('trade'))  # recharger proprement
+                flash("Position opened successfully!", "success")
+            return redirect(url_for('trade'))
+
         if request.form.get('close_position') == '1':
             position_id = request.form.get('position_id')
             user.close_position(position_id)
@@ -291,13 +290,13 @@ def trade():
             'position_value': position_value
         })
 
-    available_funds = user.available_funds
-
-    return render_template('trade_and_positions.html',
+    return render_template('trade.html',
+                           username=session['username'],
+                           elo_rapid=get_elo_rapid(),
                            assets=assets,
                            assets_values=assets_values,
                            positions=positions,
-                           available_funds=available_funds)
+                           available_funds=user.available_funds)
 
 
 @app.errorhandler(404)
@@ -544,6 +543,7 @@ if __name__ == "__main__":
 
 # Upgrades
 # - Add a maximum number of characters for username (7) else >= ...
+# - Password par mail
 
 # BugFix
 # - Erreur de valeur d'equity quand les actions montent et descendent

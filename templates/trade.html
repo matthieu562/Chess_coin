@@ -1,13 +1,127 @@
-{% extends "base.html" %}
+{% extends "base_with_elo.html" %}
 
-{% block title %} Loïc Coin - 404 {%  endblock %}
+{% block title %} Loïc Coin - Trade {% endblock %}
 
 {% block content %}
-<!-- 404 Error Text -->
-<div class="text-center">
-    <div class="error mx-auto" data-text="404">404</div>
-    <p class="lead text-gray-800 mb-5">Page Not Found</p>
-    <p class="text-gray-500 mb-0">It looks like you found a glitch in the matrix...</p>
-    <a href="{{ url_for('home') }}">&larr; Back to Dashboard</a>
+
+
+{% with messages = get_flashed_messages(with_categories=true) %}
+  {% for category, message in messages %}
+    <div class="alert alert-{{ category }} alert-dismissible fade show" role="alert">
+        {{ message }}
+        <button type="button" class="close" data-dismiss="alert" aria-label="Close">
+            <span aria-hidden="true">&times;</span>
+        </button>
+    </div>
+  {% endfor %}
+{% endwith %}
+
+<div id="errorMsg" class="alert alert-danger d-none" role="alert"></div>
+
+<!-- Funds -->
+<div class="alert alert-secondary font-weight-bold">
+    Available Funds: {{ available_funds }}
 </div>
+
+<div class="row">
+    <div class="col-md-6">
+        <div class="card shadow mb-4">
+            <div class="card-header py-3">
+                <h6 class="m-0 font-weight-bold text-success">Open a Position</h6>
+            </div>
+            <div class="card-body">
+                <form method="post" id="tradeForm" onkeydown="return event.key !== 'Enter';">
+                    <input type="hidden" name="open_position" value="1" />
+                    <input type="hidden" name="action_type" id="actionType" />
+                    <div class="form-group">
+                        <label for="asset">Choose an asset</label>
+                        <select class="form-control" name="asset" required>
+                            {% for asset in assets %}
+                                <option value="{{ asset }}">{{ asset }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label for="quantity">Quantity</label>
+                        <input type="number" step="any" min="0.01" name="quantity" id="quantity" class="form-control" placeholder="e.g. 1.5" required>
+                    </div>
+                    <div class="d-flex">
+                        <button type="button" class="btn btn-danger w-50 mr-2" onclick="submitTrade('short')">Short</button>
+                        <button type="button" class="btn btn-success w-50 ml-2" onclick="submitTrade('long')">Long</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+function submitTrade(type) {
+    const quantityField = document.getElementById('quantity');
+    const quantity = parseFloat(quantityField.value);
+    const errorBox = document.getElementById('errorMsg');
+
+    if (isNaN(quantity) || quantity <= 0) {
+        errorBox.textContent = "⚠️ Quantity must be a positive number.";
+        errorBox.classList.remove("d-none");
+        return;
+    }
+
+    errorBox.classList.add("d-none");
+
+    quantityField.value = (type === 'short') ? -Math.abs(quantity) : Math.abs(quantity);
+    document.getElementById('actionType').value = type;
+    document.getElementById('tradeForm').submit();
+}
+</script>
+
+<!-- Positions Table -->
+<div class="card shadow mb-4">
+    <div class="card-header py-3 bg-primary text-white">
+        <h6 class="m-0 font-weight-bold">📈 Open Positions</h6>
+    </div>
+    <div class="card-body">
+        {% if positions %}
+        <div class="table-responsive" style="overflow-x: auto;">
+            <table class="table table-hover align-middle">
+                <thead class="table-light">
+                    <tr>
+                        <th class="text-center">Asset</th>
+                        <th class="text-center">Quantity</th>
+                        <th class="text-center">Entry Price</th>
+                        <th class="text-center">Profit</th>
+                        <th class="text-center"></th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for pos in positions %}
+                    <tr>
+                        <td class="text-center align-middle">{{ pos.asset }}</td>
+                        <td class="text-center align-middle {% if pos.quantity < 0 %}text-danger{% else %}text-success{% endif %}">
+                            {{ "%.1f"|format(pos.quantity) }}
+                        </td>
+                        <td class="text-center align-middle">{{ "%.0f"|format(pos.entry_price) }}</td>
+                        <td class="text-center align-middle {% if (pos.position_value - (pos.entry_price * (pos.quantity | abs))) < 0 %}text-danger{% else %}text-success{% endif %}">
+                            {{ "%.1f"|format(pos.position_value - (pos.entry_price * (pos.quantity | abs))) }}
+                        </td>
+                        <td class="text-center align-middle">
+                            <form method="post" style="margin:0;">
+                                <input type="hidden" name="close_position" value="1" />
+                                <input type="hidden" name="position_id" value="{{ pos.id }}" />
+                                <button type="submit" class="btn btn-sm btn-danger px-3">Close</button>
+                            </form>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% else %}
+            <p>No open positions.</p>
+        {% endif %}
+    </div>
+</div>
+
+
+
 {% endblock %}
