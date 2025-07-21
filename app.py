@@ -1,23 +1,18 @@
-import psycopg2
-from psycopg2.extensions import ISOLATION_LEVEL_AUTOCOMMIT
-from flask import Flask, render_template_string, session, request, redirect, url_for, render_template
-from chessdotcom import get_player_stats, Client
+from flask import Flask, session, request, redirect, url_for, render_template, render_template_string
+from chessdotcom import get_player_stats, Client, get_player_game_archives, get_player_games_by_month
 from flask_sqlalchemy import SQLAlchemy
 import os
-from datetime import datetime, timezone
+from datetime import timezone
 from werkzeug.security import generate_password_hash, check_password_hash
 from datetime import datetime, timedelta
 
-#for test
-import plotly
-import plotly.express as px
+import pytz
 import pandas as pd
 import json
-
-DB_NAME = "test_db"
-DB_USER = "postgres"
-DB_HOST = "localhost"
-DB_PORT = "5432"
+from bokeh.plotting import figure
+from bokeh.embed import components
+from bokeh.models import HoverTool, Legend
+from bokeh.resources import CDN
 
 """
 def create_db_if_not_exists():
@@ -34,16 +29,16 @@ def create_db_if_not_exists():
 create_db_if_not_exists()
 """
 
-LOCAL = False
-
+SQLALCHEMY_DATABASE_URI = os.environ.get("DATABASE_URL")
+SECRET_KEY = os.environ.get("SECRET_KEY")
+# SQLALCHEMY_DATABASE_URI = "postgresql://postgres@localhost:5432/test_db"
+# SECRET_KEY =  "5#y2LF4ZQ8&sefc7"
 app = Flask(__name__)
-if LOCAL:
-    app.config['SQLALCHEMY_DATABASE_URI'] = f"postgresql://{DB_USER}@{DB_HOST}:{DB_PORT}/{DB_NAME}"
-else:
-    app.config['SQLALCHEMY_DATABASE_URI'] = os.environ.get("DATABASE_URL")
+app.secret_key = SECRET_KEY
+app.config['SQLALCHEMY_DATABASE_URI'] = SQLALCHEMY_DATABASE_URI
+
 db = SQLAlchemy(app)
 
-app.secret_key = b'_5#y2L"F4ZQ8z\n\xec]/'
 
 class EloHistory(db.Model):
     __tablename__ = 'elo_history'
@@ -177,7 +172,7 @@ class User(db.Model):
         return check_password_hash(self.password_hash, password)
 
 with app.app_context():
-    #db.drop_all()
+    # db.drop_all()
     db.create_all()
 
 # @app.route('/update', methods=['GET'])
@@ -212,10 +207,35 @@ def leaderboard():
             'loic_coin_qty': loic_coin_qty
         })
 
-    # Trier par equity décroissante et prendre les 10 premiers
-    leaderboard_data = sorted(leaderboard_data, key=lambda x: x['equity'], reverse=True)[:10]
+    # Trier par equity décroissante
+    leaderboard_data = sorted(leaderboard_data, key=lambda x: x['equity'], reverse=True)
 
-    return render_template('leaderboard.html', leaderboard=leaderboard_data)
+    # Ajouter le classement avec gestion des égalités
+    ranked_leaderboard = []
+    current_rank = 1
+    for index, player in enumerate(leaderboard_data):
+        if index > 0 and player['equity'] == leaderboard_data[index - 1]['equity']:
+            player['rank'] = ranked_leaderboard[-1]['rank']  # même rang que précédent
+        else:
+            player['rank'] = current_rank
+
+        ranked_leaderboard.append(player)
+        current_rank += 1
+
+    # Trier par equity décroissante et prendre les 10 premiers
+    # leaderboard_data = sorted(leaderboard_data, key=lambda x: x['equity'], reverse=True)[:10]
+
+    username = session.get('username')
+    elo_rapid = get_elo_rapid()
+
+    return render_template('leaderboard.html', username=username, elo_rapid=elo_rapid, leaderboard=ranked_leaderboard)
+
+@app.route('/give', methods=['GET', 'POST'])
+def give():
+    user = User.query.filter_by(username=session['username']).first()
+    user.available_funds += 500
+    db.session.commit()
+    return render_template_string('ok')
 
 @app.route('/trade', methods=['GET', 'POST'])
 def trade():
@@ -276,6 +296,16 @@ def trade():
                            positions=positions,
                            available_funds=available_funds)
 
+
+@app.errorhandler(404)
+def page_not_found(e):
+
+
+    username = session.get('username')
+    elo_rapid = get_elo_rapid()
+
+    return render_template('404.html', username=username, elo_rapid=elo_rapid)
+
 # Ne foncitonne pas
 @app.route('/force/<int:value>', methods=['GET'])
 def force_value(value):
@@ -288,29 +318,106 @@ def force_value(value):
 @app.route('/elo')
 def show_latest_elo():
     # Récupération de toutes les entrées ELO
-    all_elo_entries = EloHistory.query.order_by(EloHistory.timestamp.asc()).all()
+    # all_elo_entries = EloHistory.query.order_by(EloHistory.timestamp.asc()).all()
 
-    if not all_elo_entries:
-        return "Aucune donnée ELO en base. <a href='/force/Loïc_coin/1000'>Ajouter une valeur</a>"
+    # if not all_elo_entries:
+    #     return "Aucune donnée ELO en base. <a href='/force/Loïc_coin/1000'>Ajouter une valeur</a>"
 
     # Préparer les données dans un DataFrame
-    data = [{
-        'timestamp': entry.timestamp,
-        'elo': entry.elo,
-        'asset': entry.asset
-    } for entry in all_elo_entries]
+    Client.request_config['headers']['User-Agent'] = 'my-app'
+    chess_com_tag = "Lo_Chx"
+    games_info = get_player_game_archives(chess_com_tag).json
 
-    df = pd.DataFrame(data)
+    local_tz = pytz.timezone("Europe/Paris")
+
+    elo_evolution = []
+    for archive_url in games_info['archives']:
+
+        parts = archive_url.strip("/").split("/")
+        if len(parts) < 2:
+            print(f"Archive URL invalide : {archive_url}")
+            continue
+
+        year, month = parts[-2], parts[-1]
+        month_games = get_player_games_by_month(chess_com_tag, year, month).json['games']
+
+        for game in month_games:
+            if game["rules"] != "chess" or game["time_class"] != "rapid":
+                continue
+            ts_utc = datetime.fromtimestamp(game.get("end_time", 0), tz=timezone.utc)
+            ts_local = ts_utc.astimezone(local_tz)
+            if chess_com_tag.lower() in game["white"]["username"].lower():
+                rating = game["white"]["rating"]
+            elif chess_com_tag.lower() in game["black"]["username"].lower():
+                rating = game["black"]["rating"]
+            else:
+                continue
+            elo_evolution.append((ts_local, rating))
+
+    # Supprimer les doublons (par timestamp), garder le plus récent
+    seen = {}
+    for t, r in elo_evolution:
+        seen[t] = r
+
+    df = pd.DataFrame(sorted(seen.items()), columns=["Date", "ELO"])
+    df = df[1:]
+    df['Date'] = pd.to_datetime(df['Date'])
+    df['ELO'] = pd.to_numeric(df['ELO'], errors='coerce')
+    # df["Player"] = "Loïc Coin"
+    # return render_template_string(f"Df is empty: {df_clean[['Date', 'ELO']].tail(10)}")
+
+    # data = [{
+    #     'timestamp': entry.timestamp,
+    #     'elo': int(entry.elo),
+    #     'asset': entry.asset
+    # } for entry in all_elo_entries]
+    #
+    # df = pd.DataFrame(data)
+
+    # df["timestamp"] = pd.to_datetime(df["timestamp"])
+    # df["elo"] = pd.to_numeric(df["elo"], errors="coerce")
 
     # Tracer un graphique avec une courbe par asset
-    fig = px.line(df, x='timestamp', y='elo', color='asset', title='History of ELO values over time')
-    elo_graph = json.dumps(fig, cls=plotly.utils.PlotlyJSONEncoder)
+    # fig = px.line(df, x="Date", y="ELO", color="Player", title="History of ELO values over time", markers=True)
+    # elo_graph = json.dumps(fig, cls=plotly.utils.PlotlyJSONEncoder)
 
-    loic_latest = next((entry for entry in reversed(all_elo_entries) if entry.asset == "Loïc_coin"), None)
-    elo_rapid = loic_latest.elo if loic_latest else None
+    # Création du plot Bokeh
+    p = figure(x_axis_type='datetime',
+               sizing_mode="stretch_width",
+               height=400,
+               tools="pan,wheel_zoom,box_zoom,reset,save")
+
+    # Ligne + points
+    line = p.line(df['Date'], df['ELO'], line_width=2)
+    p.circle(df['Date'], df['ELO'], size=4, fill_color="black")
+
+    # Légende personnalisée (hors zone du graphe)
+    legend = Legend(items=[("Loïc Coin", [line])])
+    legend.label_text_font_size = "13px"
+    p.add_layout(legend, 'below')  # En dehors à droite
+
+    # Axes labels
+    p.xaxis.axis_label = 'Date'
+    p.yaxis.axis_label = 'ELO'
+
+    # Hover tooltip
+    hover = HoverTool(tooltips=[("Date", "@x{%F %T}"), ("ELO", "@y")],
+                      formatters={'@x': 'datetime'},
+                      mode='vline')
+    p.add_tools(hover)
+
+    # Génération des scripts et div à insérer dans la page HTML
+    script, div = components(p)
+    cdn_js = CDN.js_files[0]
+    cdn_css = CDN.css_files[0] if CDN.css_files else None
+
+    # loic_latest = next((entry for entry in reversed(all_elo_entries) if entry.asset == "Loïc_coin"), None)
+    # elo_rapid = loic_latest.elo if loic_latest else None
+    elo_rapid = df.iloc[-1]["ELO"]
 
     username = session.get('username')
-    return render_template('home.html', elo_rapid=elo_rapid, loic_coin_graph=elo_graph, username=username)
+    return render_template('home.html', elo_rapid=elo_rapid, script=script, div=div, cdn_js=cdn_js, cdn_css=cdn_css, username=username)
+    # return render_template('home.html', elo_rapid=elo_rapid, loic_coin_graph=elo_graph, username=username)
 
     # return render_template_string('''
     #     <h1>Latest ELO</h1>
@@ -343,9 +450,7 @@ def login():
             session['username'] = user.username
             return redirect(url_for('home'))
         return 'Incorrect username or password.'
-    return render_template(
-        'login.html'
-    )
+    return render_template('login.html')
     # return render_template_string('''
     #     <h2>Login</h2>
     #     <form method="post">
@@ -369,9 +474,7 @@ def register():
         db.session.commit()
         session['username'] = username
         return redirect(url_for('home'))
-    return render_template(
-        'register.html'
-    )
+    return render_template('register.html')
     # return render_template_string('''
     #     <h2>Create an account</h2>
     #     <form method="post">
@@ -387,5 +490,58 @@ def logout():
     session.pop('username', None)
     return redirect(url_for('login'))
 
+
+def get_elo_rapid():
+    # Préparer les données dans un DataFrame
+    Client.request_config['headers']['User-Agent'] = 'my-app'
+    chess_com_tag = "Lo_Chx"
+    games_info = get_player_game_archives(chess_com_tag).json
+
+    local_tz = pytz.timezone("Europe/Paris")
+
+    elo_evolution = []
+    for archive_url in games_info['archives']:
+
+        parts = archive_url.strip("/").split("/")
+        if len(parts) < 2:
+            print(f"Archive URL invalide : {archive_url}")
+            continue
+
+        year, month = parts[-2], parts[-1]
+        month_games = get_player_games_by_month(chess_com_tag, year, month).json['games']
+
+        for game in month_games:
+            if game["rules"] != "chess" or game["time_class"] != "rapid":
+                continue
+            ts_utc = datetime.fromtimestamp(game.get("end_time", 0), tz=timezone.utc)
+            ts_local = ts_utc.astimezone(local_tz)
+            if chess_com_tag.lower() in game["white"]["username"].lower():
+                rating = game["white"]["rating"]
+            elif chess_com_tag.lower() in game["black"]["username"].lower():
+                rating = game["black"]["rating"]
+            else:
+                continue
+            elo_evolution.append((ts_local, rating))
+
+    # Supprimer les doublons (par timestamp), garder le plus récent
+    seen = {}
+    for t, r in elo_evolution:
+        seen[t] = r
+
+    df = pd.DataFrame(sorted(seen.items()), columns=["Date", "ELO"])
+    df = df[1:]
+    df['Date'] = pd.to_datetime(df['Date'])
+    df['ELO'] = pd.to_numeric(df['ELO'], errors='coerce')
+    return df.iloc[-1]["ELO"]
+
+
 if __name__ == "__main__":
     app.run(debug=True, use_reloader=False)
+
+
+# Upgrades
+# - Add a maximum number of characters for username (7) else >= ...
+
+# BugFix
+# - Erreur de valeur d'equity quand les actions montent et descendent
+# - Erreur valeur de coin quand on achète et vend en même temps
