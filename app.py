@@ -101,8 +101,12 @@ class Position(db.Model):
 
     def get_position_value(self):
         current_elo = EloHistory.get_current_elo(self.asset)
-        position_value = abs(self.quantity) * current_elo
+        if(self.quantity > 0):
+            position_value = (current_elo / self.entry_price) * (self.quantity * self.entry_price)
+        elif(self.quantity < 0):
+            position_value = (self.entry_price / current_elo) * (-self.quantity * self.entry_price)
         print(f"Position value: {position_value}")
+
         return position_value
 
 class User(db.Model):
@@ -273,7 +277,6 @@ def trade():
             user.close_position(position_id)
             return redirect(url_for('trade'))
 
-
     # Préparer les positions
     positions = []
     for pos in user.open_positions:
@@ -306,7 +309,7 @@ def page_not_found(e):
 
     return render_template('404.html', username=username, elo_rapid=elo_rapid)
 
-# Ne foncitonne pas
+# Ne fonctionne pas
 @app.route('/force/<int:value>', methods=['GET'])
 def force_value(value):
     """Force un nouvel ELO pour un asset donné"""
@@ -545,3 +548,5 @@ if __name__ == "__main__":
 # BugFix
 # - Erreur de valeur d'equity quand les actions montent et descendent
 # - Erreur valeur de coin quand on achète et vend en même temps
+
+# catter(size=...) instead of circle() in Bokeh
