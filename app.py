@@ -50,11 +50,11 @@ class EloHistory(db.Model):
 
     @staticmethod
     def get_current_elo(asset): # Pour gérer les positions sans mettre forcément dans le graphic
-        Client.request_config['headers']['User-Agent'] = 'my-app'
-        chess_com_tag = EloHistory.query.filter_by(asset=asset).first().chess_com_tag
-        stats = get_player_stats(chess_com_tag).json
-        elo_rapid = stats['stats']['chess_rapid']['last']['rating']
-        # elo_rapid = 500
+    #     Client.request_config['headers']['User-Agent'] = 'my-app'
+    #     chess_com_tag = EloHistory.query.filter_by(asset=asset).first().chess_com_tag
+    #     stats = get_player_stats(chess_com_tag).json
+    #     elo_rapid = stats['stats']['chess_rapid']['last']['rating']
+        elo_rapid = 1000
         return elo_rapid
 
     @staticmethod
@@ -140,7 +140,7 @@ class User(db.Model):
             if abs(quantity) > max_quantity:
                 raise ValueError("Not enough funds")
         except (ValueError, TypeError) as e:
-            return f"Invalid quantity: {e} <br><a href='/trade'>Back</a>"
+            return f"Invalid quantity: {e}"
 
         self.available_funds -= abs(quantity) * latest_elo.elo
         new_position = Position(user_id=self.id, asset=asset, quantity=quantity, entry_price=latest_elo.elo)
@@ -281,13 +281,13 @@ def trade():
     for pos in user.open_positions:
         latest_elo_entry = EloHistory.query.filter_by(asset=pos.asset).order_by(EloHistory.timestamp.desc()).first()
         current_elo = latest_elo_entry.elo if latest_elo_entry else 0
-        position_value = abs(pos.quantity) * current_elo
         positions.append({
             'id': pos.id,
             'asset': pos.asset,
             'quantity': pos.quantity,
             'entry_price': pos.entry_price,
-            'position_value': position_value
+            'position_value': pos.get_position_value()
+            # 'position_value': pos.quantity * (pos.get_position_value() - pos.entry_price)
         })
 
     return render_template('trade.html',
@@ -470,7 +470,7 @@ def register():
         password = request.form['password']
         if User.query.filter_by(username=username).first():
             return 'Username already taken.'
-        new_user = User(username=username, available_funds=1000) 
+        new_user = User(username=username, available_funds=10000) 
         new_user.set_password(password)
         db.session.add(new_user)
         db.session.commit()
@@ -544,9 +544,12 @@ if __name__ == "__main__":
 # Upgrades
 # - Add a maximum number of characters for username (7) else >= ...
 # - Password par mail
+# - Max printed limite characters in leaderboard = 7
+# - In trade, Open a position table should be a blue tab and no green text color
+# - Top right user logo in blue !
 
 # BugFix
 # - Erreur de valeur d'equity quand les actions montent et descendent
 # - Erreur valeur de coin quand on achète et vend en même temps
-
+# - Profit non correct
 # catter(size=...) instead of circle() in Bokeh
