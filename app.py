@@ -450,9 +450,7 @@ def login():
             session['username'] = user.username
             return redirect(url_for('home'))
         return 'Incorrect username or password.'
-    return render_template(
-        'login.html'
-    )
+    return render_template('login.html')
     # return render_template_string('''
     #     <h2>Login</h2>
     #     <form method="post">
@@ -476,9 +474,7 @@ def register():
         db.session.commit()
         session['username'] = username
         return redirect(url_for('home'))
-    return render_template(
-        'register.html'
-    )
+    return render_template('register.html')
     # return render_template_string('''
     #     <h2>Create an account</h2>
     #     <form method="post">
@@ -541,3 +537,11 @@ def get_elo_rapid():
 
 if __name__ == "__main__":
     app.run(debug=True, use_reloader=False)
+
+
+# Upgrades
+# - Add a maximum number of characters for username (7) else >= ...
+
+# BugFix
+# - Erreur de valeur d'equity quand les actions montent et descendent
+# - Erreur valeur de coin quand on achète et vend en même temps
