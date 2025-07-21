@@ -1,4 +1,4 @@
-from flask import Flask, session, request, redirect, url_for, render_template, render_template_string, flash, jsonify
+from flask import Flask, session, request, redirect, url_for, render_template, render_template_string
 from chessdotcom import get_player_stats, Client, get_player_game_archives, get_player_games_by_month
 from flask_sqlalchemy import SQLAlchemy
 import os
@@ -101,8 +101,12 @@ class Position(db.Model):
 
     def get_position_value(self):
         current_elo = EloHistory.get_current_elo(self.asset)
-        position_value = abs(self.quantity) * current_elo
+        if(self.quantity > 0):
+            position_value = (current_elo / self.entry_price) * (self.quantity * self.entry_price)
+        elif(self.quantity < 0):
+            position_value = (self.entry_price / current_elo) * (-self.quantity * self.entry_price)
         print(f"Position value: {position_value}")
+
         return position_value
 
 class User(db.Model):
@@ -268,9 +272,9 @@ def trade():
         if request.form.get('close_position') == '1':
             position_id = request.form.get('position_id')
             user.close_position(position_id)
-            flash("Position closed.", "info")
             return redirect(url_for('trade'))
 
+    # Préparer les positions
     positions = []
     for pos in user.open_positions:
         latest_elo_entry = EloHistory.query.filter_by(asset=pos.asset).order_by(EloHistory.timestamp.desc()).first()
@@ -292,19 +296,6 @@ def trade():
                            positions=positions,
                            available_funds=user.available_funds)
 
-@app.route('/api/asset_history/<asset>')
-def asset_history(asset):
-    entries = (EloHistory.query
-               .filter_by(asset=asset)
-               .order_by(EloHistory.timestamp.asc())
-               .limit(50)  # Tu peux augmenter si besoin
-               .all())
-
-    data = {
-        "timestamps": [entry.timestamp.strftime("%Y-%m-%d %H:%M") for entry in entries],
-        "elos": [entry.elo for entry in entries]
-    }
-    return jsonify(data)
 
 @app.errorhandler(404)
 def page_not_found(e):
@@ -315,7 +306,7 @@ def page_not_found(e):
 
     return render_template('404.html', username=username, elo_rapid=elo_rapid)
 
-# Ne foncitonne pas
+# Ne fonctionne pas
 @app.route('/force/<int:value>', methods=['GET'])
 def force_value(value):
     """Force un nouvel ELO pour un asset donné"""
@@ -553,4 +544,7 @@ if __name__ == "__main__":
 # - Password par mail
 
 # BugFix
+# - Erreur de valeur d'equity quand les actions montent et descendent
 # - Erreur valeur de coin quand on achète et vend en même temps
+
+# catter(size=...) instead of circle() in Bokeh
