@@ -50,11 +50,11 @@
                                 </div>
                             </td>
                             <td>
-                                <span class="text-success fw-bold">{{ "%.2f"|format(player.equity) }}</span>
+                                <span class="text-success fw-bold">{{ "%0.f"|format(player.equity) }}</span>
                             </td>
                             <td>
                                 <i class="fas fa-coins text-warning"></i>
-                                {{ "%.2f"|format(player.loic_coin_qty) }}
+                                {{ "%.1f"|format(player.loic_coin_qty) }}
                             </td>
                         </tr>
                     {% endfor %}
