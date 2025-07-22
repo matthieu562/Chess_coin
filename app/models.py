@@ -5,12 +5,14 @@ from werkzeug.security import generate_password_hash, check_password_hash
 from chessdotcom import get_player_stats, Client
 
 from . import db
+from app.utils.chess_api import get_elo_rapid
+from config import LOIC_USERNAME
 
 
 class EloHistory(db.Model):
     __tablename__ = 'elo_history'
     id = db.Column(db.Integer, primary_key=True)
-    chess_com_tag = db.Column(db.String(80), nullable=False, default="Lo_Chx")
+    chess_com_tag = db.Column(db.String(80), nullable=False, default=LOIC_USERNAME)
     asset = db.Column(db.String(80), nullable=False, default="Loïc_coin")
     elo = db.Column(db.Integer, nullable=False)
     timestamp = db.Column(db.DateTime, default=datetime.now(timezone.utc))
@@ -99,8 +101,11 @@ class User(db.Model):
     #   user.open_positions
 
     def open_position(self):
+
+        latest_elo = get_elo_rapid()
+
         asset = request.form['asset']
-        latest_elo = EloHistory.query.filter_by(asset=asset).order_by(EloHistory.timestamp.desc()).first()
+        # latest_elo = EloHistory.query.filter_by(asset=asset).order_by(EloHistory.timestamp.desc()).first()
 
         try:
             quantity = float(request.form['quantity'])
@@ -108,14 +113,17 @@ class User(db.Model):
                 raise ValueError("Quantity can't be zero")
             if self is None:
                 raise ValueError("User not found")
-            max_quantity = self.available_funds / latest_elo.elo
+            # max_quantity = self.available_funds / latest_elo.elo
+            max_quantity = self.available_funds / latest_elo
             if abs(quantity) > max_quantity:
                 raise ValueError("Not enough funds")
         except (ValueError, TypeError) as e:
             return f"Invalid quantity: {e}"
 
-        self.available_funds -= abs(quantity) * latest_elo.elo
-        new_position = Position(user_id=self.id, asset=asset, quantity=quantity, entry_price=latest_elo.elo)
+        # self.available_funds -= abs(quantity) * latest_elo.elo
+        self.available_funds -= abs(quantity) * latest_elo
+        # new_position = Position(user_id=self.id, asset=asset, quantity=quantity, entry_price=latest_elo.elo)
+        new_position = Position(user_id=self.id, asset=asset, quantity=quantity, entry_price=latest_elo)
         db.session.add(new_position)
         db.session.commit()
         return 0

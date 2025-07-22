@@ -13,7 +13,7 @@ def trading_page():
     if 'username' not in session:
         return redirect(url_for('auth.login'))
 
-    user = User.query.filter_by(username=session['username']).first()
+    user = User.query.filter_by(username=session['username']).first() # SaNsE
     EloHistory.update_assets()
 
     assets = EloHistory.get_all_assets_name()
