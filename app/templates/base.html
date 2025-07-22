@@ -31,7 +31,7 @@
         <ul class="navbar-nav bg-gradient-primary sidebar sidebar-dark accordion toggled" id="accordionSidebar">
 
             <!-- Sidebar - Brand -->
-            <a class="sidebar-brand d-flex align-items-center justify-content-center" href="{{ url_for('home') }}">
+            <a class="sidebar-brand d-flex align-items-center justify-content-center" href="{{ url_for('home.homepage') }}">
                 <div class="sidebar-brand-icon rotate-n-15">
                     <i class="fas fa-laugh-wink"></i>
                 </div>
@@ -47,13 +47,13 @@
 
             <!-- Nav Item - Dashboard -->
             <li class="nav-item active">
-                <a class="nav-link" href="{{ url_for('home') }}">
+                <a class="nav-link" href="{{ url_for('home.homepage') }}">
                     <i class="fas fa-fw fa-tachometer-alt"></i>
                     <span>Dashboard</span></a>
             </li>
 
             <li class="nav-item active">
-                <a class="nav-link" href="{{ url_for('leaderboard') }}">
+                <a class="nav-link" href="{{ url_for('leaderboard.leaderboard_page') }}">
                     <i class="fa fa-gamepad"></i>
                     <span>Leaderboard</span></a>
             </li>
@@ -67,7 +67,7 @@
                 </div>
 
                 <li class="nav-item active">
-                    <a class="nav-link" href="{{ url_for('trade') }}">
+                    <a class="nav-link" href="{{ url_for('trade.trading_page') }}">
                         <i class="fa fa-university"></i>
                         <span>Trade</span></a>
                 </li>
@@ -101,19 +101,19 @@
                                 {% if username %}
                                     <span class="mr-2 d-none d-lg-inline text-gray-600 large"> {{ username }} </span>
                                 {%  endif %}
-                                <i class="fa fa-user-secret fa-lg fa-fw mr-2 text-gray-400"></i>
+                                <i class="fa fa-user-secret fa-lg fa-fw mr-2 icon-blue"></i>
                             </a>
                            <!-- Dropdown - User Information -->
                             <div class="dropdown-menu dropdown-menu-right shadow animated--grow-in"
                                 aria-labelledby="userDropdown">
 
                                 {% if username %}
-                                    <a class="dropdown-item" href="{{ url_for('logout') }}">
+                                    <a class="dropdown-item" href="{{ url_for('auth.logout') }}">
                                         <i class="fas fa-sign-out-alt fa-sm fa-fw mr-2 text-gray-400"></i>
                                         Logout
                                     </a>
                                 {% else %}
-                                    <a class="dropdown-item" href="{{ url_for('login') }}">
+                                    <a class="dropdown-item" href="{{ url_for('auth.login') }}">
                                         <i class="fas fa-sign-in-alt fa-sm fa-fw mr-2 text-gray-400"></i>
                                         Login
                                     </a>
