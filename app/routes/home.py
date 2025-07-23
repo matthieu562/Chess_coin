@@ -4,7 +4,8 @@ from bokeh.models import HoverTool, Legend
 from bokeh.resources import CDN
 from flask import Blueprint, redirect, render_template, session, url_for
 
-from app.utils.chess_api import get_elo_df
+from app.utils.chess_api import get_elo_df, get_current_elo
+from config import LOIC_USERNAME
 
 
 home = Blueprint('home', __name__)
@@ -17,7 +18,7 @@ def homepage():
 
 @home.route('/elo')
 def elo_page():
-    df = get_elo_df()
+    df = get_elo_df(session.get('selected_chess_com_tag', LOIC_USERNAME))
 
     # Création du plot Bokeh
     p = figure(
@@ -51,7 +52,7 @@ def elo_page():
     return render_template(
         template_name_or_list='home.html',
         username=session.get('username'),
-        elo_rapid=df.iloc[-1]["ELO"],
+        elo_rapid=get_current_elo(session.get('selected_chess_com_tag', LOIC_USERNAME)),
         script=script,
         div=div,
         cdn_js=cdn_js,

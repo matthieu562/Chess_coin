@@ -11,8 +11,11 @@ if __name__ == '__main__':
 # - Password par mail
 # - Max printed limite characters in leaderboard = 7
 # - Remplacer tous les messages d'erreur par des pop-ups dans les pages HTML
+# - Filtre gloabl sur tous les coins
+# - Ajouter les formules du trade
 
 # BugFix
 # - Erreur de valeur d'equity quand les actions montent et descendent
 # - Erreur valeur de coin quand on achète et vend en même temps
 # - Profit non correct
+# - Ca bug dans le login quand ça marche pas
