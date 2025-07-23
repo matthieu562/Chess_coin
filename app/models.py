@@ -1,26 +1,25 @@
 from datetime import datetime, timedelta, timezone
 
-from flask import request
+from flask import request, session
 from werkzeug.security import generate_password_hash, check_password_hash
 from chessdotcom import get_player_stats, Client
 
 from . import db
-from app.utils.chess_api import get_elo_rapid
-from config import LOIC_USERNAME
+from app.utils.chess_api import get_current_elo
+from config import CHESS_MAPPING, LOIC_USERNAME
 
 
 class EloHistory(db.Model):
     __tablename__ = 'elo_history'
     id = db.Column(db.Integer, primary_key=True)
     chess_com_tag = db.Column(db.String(80), nullable=False, default=LOIC_USERNAME)
-    asset = db.Column(db.String(80), nullable=False, default="Loïc_coin")
     elo = db.Column(db.Integer, nullable=False)
     timestamp = db.Column(db.DateTime, default=datetime.now(timezone.utc))
 
     @staticmethod
-    def get_current_elo(asset):  # Pour gérer les positions sans mettre forcément dans le graphic
+    def get_current_elo(chess_com_tag):  # Pour gérer les positions sans mettre forcément dans le graphic
         Client.request_config['headers']['User-Agent'] = 'my-app'
-        chess_com_tag = EloHistory.query.filter_by(asset=asset).first().chess_com_tag
+        # chess_com_tag = EloHistory.query.filter_by(asset=asset).first().chess_com_tag
         stats = get_player_stats(chess_com_tag).json
         elo_rapid = stats['stats']['chess_rapid']['last']['rating']
         # elo_rapid = 1000
@@ -28,12 +27,13 @@ class EloHistory(db.Model):
 
     @staticmethod
     def update_assets():
-        assets = EloHistory.get_all_assets_name()
+        # assets = EloHistory.get_all_assets_name()
+        chess_com_tags = CHESS_MAPPING.values()
 
-        for asset in assets:
-            current_elo = EloHistory.get_current_elo(asset)
+        for chess_com_tag in chess_com_tags:
+            current_elo = EloHistory.get_current_elo(chess_com_tag)
 
-            latest_elo_entry = db.session.query(EloHistory).filter_by(asset=asset).order_by(
+            latest_elo_entry = db.session.query(EloHistory).filter_by(chess_com_tag=chess_com_tag).order_by(
                 EloHistory.timestamp.desc()).first()
             if latest_elo_entry:
                 latest_timestamp = latest_elo_entry.timestamp
@@ -46,19 +46,13 @@ class EloHistory(db.Model):
                     latest_elo_entry.timestamp = datetime.now(timezone.utc)
                     db.session.commit()
                 else:
-                    new_entry = EloHistory(elo=current_elo, asset=asset, timestamp=datetime.now(timezone.utc))
+                    new_entry = EloHistory(elo=current_elo, chess_com_tag=chess_com_tag, timestamp=datetime.now(timezone.utc))
                     db.session.add(new_entry)
                     db.session.commit()
             else:
-                new_entry = EloHistory(elo=current_elo, asset=asset, timestamp=datetime.now(timezone.utc))
+                new_entry = EloHistory(elo=current_elo, chess_com_tag=chess_com_tag, timestamp=datetime.now(timezone.utc))
                 db.session.add(new_entry)
                 db.session.commit()
-
-    @staticmethod
-    def get_all_assets_name():
-        assets = db.session.query(EloHistory.asset).distinct().all()  # Récupérer tous les noms des assets une fois
-        assets = [a[0] for a in assets]  # extraire les noms depuis les tuples
-        return assets
 
 
 class Position(db.Model):
@@ -72,7 +66,7 @@ class Position(db.Model):
     user = db.relationship('User', back_populates='open_positions')
 
     def get_position_value(self):
-        current_elo = EloHistory.get_current_elo(self.asset)
+        current_elo = EloHistory.get_current_elo(CHESS_MAPPING[self.asset])
         if (self.quantity > 0):
             position_value = (current_elo / self.entry_price) * (self.quantity * self.entry_price)
         elif (self.quantity < 0):
@@ -92,20 +86,13 @@ class User(db.Model):
     available_funds = db.Column(db.Integer, nullable=False)
     open_positions = db.relationship('Position', back_populates='user', cascade='all, delete-orphan')
     password_hash = db.Column(db.String(512), nullable=False)
-
-    # open_positions  = # list of open positions
-    # position : [asset, entry price, position size (capital_at_risk), direction (long/short) pas necessaire si c le
-    #   signe de position size, le timestamp?]
-    # not needed : portfolio_value = available_funds + get_profit(open_positions)
-    # accéder à toutes les positions ouvertes d’un user avec :
-    #   user.open_positions
+    # preferred_chess_com_tag = db.Column(db.String(80), nullable=True, default="Lo_Chx")
 
     def open_position(self):
 
-        latest_elo = get_elo_rapid()
+        latest_elo = float(get_current_elo(session.get('selected_chess_com_tag')))
 
         asset = request.form['asset']
-        # latest_elo = EloHistory.query.filter_by(asset=asset).order_by(EloHistory.timestamp.desc()).first()
 
         try:
             quantity = float(request.form['quantity'])
@@ -113,16 +100,13 @@ class User(db.Model):
                 raise ValueError("Quantity can't be zero")
             if self is None:
                 raise ValueError("User not found")
-            # max_quantity = self.available_funds / latest_elo.elo
             max_quantity = self.available_funds / latest_elo
             if abs(quantity) > max_quantity:
                 raise ValueError("Not enough funds")
         except (ValueError, TypeError) as e:
             return f"Invalid quantity: {e}"
 
-        # self.available_funds -= abs(quantity) * latest_elo.elo
         self.available_funds -= abs(quantity) * latest_elo
-        # new_position = Position(user_id=self.id, asset=asset, quantity=quantity, entry_price=latest_elo.elo)
         new_position = Position(user_id=self.id, asset=asset, quantity=quantity, entry_price=latest_elo)
         db.session.add(new_position)
         db.session.commit()

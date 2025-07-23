@@ -16,6 +16,7 @@ def create_app():
 
     with app.app_context():
         from .models import User, Position, EloHistory
+        # db.drop_all()
         db.create_all()
 
     register_routes(app)

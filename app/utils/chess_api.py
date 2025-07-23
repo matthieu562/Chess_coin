@@ -12,9 +12,8 @@ def _init_chesscom_request():
     Client.request_config['headers']['User-Agent'] = 'my-app'
 
 
-def get_current_elo():
+def get_current_elo(chess_com_tag):
     _init_chesscom_request()
-    chess_com_tag = LOIC_USERNAME
 
     stats = get_player_stats(chess_com_tag).json
     elo_rapid = stats['stats']['chess_rapid']['last']['rating']
@@ -22,11 +21,10 @@ def get_current_elo():
     return elo_rapid
 
 
-def get_elo_df():
+def get_elo_df(chess_com_tag):
     _init_chesscom_request()
-    chess_com_tag = LOIC_USERNAME
 
-    games_info = get_player_game_archives(LOIC_USERNAME).json
+    games_info = get_player_game_archives(chess_com_tag).json
 
     local_tz = pytz.timezone("Europe/Paris")
 
@@ -66,6 +64,6 @@ def get_elo_df():
     return df
 
 
-def get_elo_rapid():
-    df = get_elo_df()
-    return df.iloc[-1]["ELO"]
+# def get_elo_rapid():
+#     df = get_elo_df()
+#     return df.iloc[-1]["ELO"]

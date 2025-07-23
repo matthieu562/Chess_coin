@@ -7,5 +7,11 @@ class Config:
     SQLALCHEMY_TRACK_MODIFICATIONS = False
 
 
-# LOIC_USERNAME = 'Lo_Chx'
-LOIC_USERNAME = 'matt292'
+LOIC_USERNAME = 'Lo_Chx'
+
+CHESS_MAPPING = {
+    'Loïc_Coin': 'Lo_Chx',
+    'Matt_Coin': 'matt292',
+    'Quentin_Coin': 'Ciudalcampo2',
+    'Test_Coin': 'Ciudal'
+}
