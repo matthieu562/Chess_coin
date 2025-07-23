@@ -75,6 +75,31 @@ function submitTrade(type) {
 }
 </script>
 
+<script>
+document.addEventListener("DOMContentLoaded", function() {
+    const assetSelect = document.querySelector('select[name="asset"]');
+
+    if (assetSelect) {
+        assetSelect.addEventListener('change', function() {
+            const selectedAsset = this.value;
+
+            fetch('/update_selected_asset', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    {#'X-CSRFToken': '{{ csrf_token() }}'  // Seulement si tu utilises Flask-WTF avec CSRF protection#}
+                },
+                body: JSON.stringify({ asset: selectedAsset })
+            })
+            .then(response => response.json())
+            .then(data => {
+                console.log('Server response :', data);
+            });
+        });
+    }
+});
+</script>
+
 <!-- Positions Table -->
 <div class="card shadow mb-4">
     <div class="card-header py-3 bg-primary text-white">
