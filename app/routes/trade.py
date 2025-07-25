@@ -58,7 +58,12 @@ def trading_page():
     return render_template(
         template_name_or_list='trade.html',
         username=user.username,
-        elo_rapid=get_current_elo(session.get('selected_chess_com_tag', LOIC_USERNAME)),
+        elo_rapid=session.get(
+            'selected_chess_com_tag_value',
+            get_current_elo(
+                session.get('selected_chess_com_tag', LOIC_USERNAME)
+            )
+        ),
         assets=assets,
         positions=positions,
         available_funds=user.available_funds
@@ -91,4 +96,6 @@ def update_selected_asset():
 
     session['selected_asset'] = selected_asset
     session['selected_chess_com_tag'] = CHESS_MAPPING[selected_asset]
-    return jsonify({'status': 'ok', 'selected': selected_asset})
+    new_elo = get_current_elo(session.get('selected_chess_com_tag'))
+    session['selected_chess_com_tag_value'] = new_elo
+    return jsonify({'status': 'ok', 'selected': selected_asset, 'elo_rapid': new_elo})

@@ -12,5 +12,10 @@ def page_not_found(e):
     return render_template(
         template_name_or_list='404.html',
         username=session.get('username'),
-        elo_rapid=get_current_elo(session.get('selected_chess_com_tag', LOIC_USERNAME))
+        elo_rapid=session.get(
+            'selected_chess_com_tag_value',
+            get_current_elo(
+                session.get('selected_chess_com_tag', LOIC_USERNAME)
+            )
+        )
     ), 404
