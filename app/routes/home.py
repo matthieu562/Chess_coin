@@ -52,7 +52,12 @@ def elo_page():
     return render_template(
         template_name_or_list='home.html',
         username=session.get('username'),
-        elo_rapid=get_current_elo(session.get('selected_chess_com_tag', LOIC_USERNAME)),
+        elo_rapid=session.get(
+            'selected_chess_com_tag_value',
+            get_current_elo(
+                session.get('selected_chess_com_tag', LOIC_USERNAME)
+            )
+        ),
         script=script,
         div=div,
         cdn_js=cdn_js,

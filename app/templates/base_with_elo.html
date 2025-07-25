@@ -8,6 +8,26 @@
         <i class="fa fa-bars"></i>
     </button>
 
+{#    <div class="ml-2 my-auto">#}
+{#        <form method="post" id="topbarAssetForm" class="mb-0">#}
+{#            <div class="d-flex align-items-center border-left-primary rounded shadow-sm px-2"#}
+{#                 style="height: 48px; background-color: #f8f9fc; min-width: 100px; max-width: 180px;">#}
+{##}
+{#                <select class="form-control form-control-sm border-0 bg-transparent text-dark font-weight-bold p-0"#}
+{#                        name="asset"#}
+{#                        id="topbarAssetSelect"#}
+{#                        style="font-size: 0.85rem;">#}
+{#                    {% for asset in assets %}#}
+{#                        <option value="{{ asset }}" {% if asset == session['selected_asset'] %}selected{% endif %}>#}
+{#                            {{ asset }}#}
+{#                        </option>#}
+{#                    {% endfor %}#}
+{#                </select>#}
+{##}
+{#            </div>#}
+{#        </form>#}
+{#    </div>#}
+
     <div class="elo-block ml-2 mr-3 my-auto">
         <div class="card border-left-primary shadow" style="height: 48px; min-width: 200px;">
             <div class="card-body py-1 px-3 d-flex align-items-center h-100">
@@ -16,7 +36,7 @@
                         <div class="text-xs font-weight-bold text-primary text-uppercase mb-1" style="line-height: 1;">
                             ELO Rapid
                         </div>
-                        <div class="h6 mb-0 font-weight-bold text-gray-800">
+                        <div class="h6 mb-0 font-weight-bold text-gray-800" id="eloRapid">
                             {{ elo_rapid }}
                         </div>
                     </div>
@@ -40,7 +60,7 @@
                 {%  endif %}
                 <i class="fa fa-user-secret fa-lg fa-fw mr-2 icon-blue"></i>
             </a>
-           <!-- Dropdown - User Information -->
+            <!-- Dropdown - User Information -->
             <div class="dropdown-menu dropdown-menu-right shadow animated--grow-in"
                 aria-labelledby="userDropdown">
 
