@@ -13,5 +13,4 @@ CHESS_MAPPING = {
     'Loïc_Coin': 'Lo_Chx',
     'Matt_Coin': 'matt292',
     'Quentin_Coin': 'Ciudalcampo2',
-    'Test_Coin': 'Ciudal'
 }

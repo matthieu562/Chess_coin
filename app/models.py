@@ -82,7 +82,7 @@ class User(db.Model):
     __tablename__ = 'users'
     id = db.Column(db.Integer, primary_key=True)
     username = db.Column(db.String(80), unique=True, nullable=False)
-    # mail for password recupération
+    email = db.Column(db.String(255), unique=True, nullable=True) 
     available_funds = db.Column(db.Integer, nullable=False)
     open_positions = db.relationship('Position', back_populates='user', cascade='all, delete-orphan')
     password_hash = db.Column(db.String(512), nullable=False)

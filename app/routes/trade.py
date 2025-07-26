@@ -73,18 +73,18 @@ def trading_page():
 @trade.route('/force/<int:value>')
 def force_value(value):
     """Force un nouvel ELO pour un asset donné"""
-    new_entry = EloHistory(asset="Loïc_coin", elo=value)
+    new_entry = EloHistory(asset="Loïc_Coin", elo=value)
     db.session.add(new_entry)
     db.session.commit()
     return redirect(url_for('trade.trading_page'))
 
 
-@trade.route('/give', methods=['GET', 'POST'])
-def give():
-    user = User.query.filter_by(username=session['username']).first()
-    user.available_funds += 500
-    db.session.commit()
-    return render_template('OK - 500 coins added')
+# @trade.route('/give', methods=['GET', 'POST'])
+# def give():
+#     user = User.query.filter_by(username=session['username']).first()
+#     user.available_funds += 500
+#     db.session.commit()
+#     return render_template('OK - 500 coins added')
 
 @trade.route('/update_selected_asset', methods=['POST'])
 def update_selected_asset():

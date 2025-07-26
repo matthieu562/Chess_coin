@@ -2,11 +2,19 @@
   "version": "0.2.0",
   "configurations": [
     {
-      "name": "Python: Run app.py",
+      "name": "Python: Run run.py",
       "type": "python",
       "request": "launch",
-      "program": "${workspaceFolder}/app.py",
-      "console": "integratedTerminal"
+      "program": "${workspaceFolder}/run.py",
+      "console": "integratedTerminal",
+      "env": {
+        "SECRET_KEY": "5#y2LF4ZQ8sefc7",
+        "DB_NAME": "test_db",
+        "DB_USER": "postgres",
+        "DB_HOST": "localhost",
+        "DB_PORT": "5432",
+        "DATABASE_URL": "postgresql://postgres@localhost:5432/test_db"
+      }
     }
   ]
 }

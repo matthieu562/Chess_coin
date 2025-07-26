@@ -1,0 +1,14 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "Set Env Vars (app.bat)",
+      "type": "shell",
+      "command": ".\\conf\\app.bat",
+      "problemMatcher": [],
+      "windows": {
+        "command": ".\\conf\\app.bat"
+      }
+    }
+  ]
+}

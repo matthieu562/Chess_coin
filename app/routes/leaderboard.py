@@ -15,7 +15,7 @@ def leaderboard_page():
     leaderboard_data = []
     for user in users:
         equity = user.get_equity()
-        loic_coin_qty = sum(pos.quantity for pos in user.open_positions if pos.asset == 'Loïc_coin')
+        loic_coin_qty = sum(pos.quantity for pos in user.open_positions if pos.asset == 'Loïc_Coin')
 
         leaderboard_data.append({
             'username': user.username,
