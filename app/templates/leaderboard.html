@@ -63,6 +63,38 @@
         </div>
     </div>
 </div>
+
+<script>
+    document.addEventListener("DOMContentLoaded", function () {
+        const topbarSelect = document.getElementById("topbarAssetSelect");
+
+        // Synchronise le topbar vers le formulaire
+        if (topbarSelect) {
+            topbarSelect.addEventListener("change", function () {
+                const selected = this.value;
+
+                // Optionnel : mise à jour serveur si nécessaire
+                fetch('/update_selected_asset', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ asset: selected })
+                })
+                .then(res => res.json())
+                .then(data => {
+                    if (data.elo_rapid) {
+                        document.getElementById("eloRapid").textContent = data.elo_rapid;
+                    }
+                });
+
+                // Facultatif : soumettre le formulaire topbar si nécessaire
+                // document.getElementById("topbarAssetForm").submit();
+            });
+        }
+    });
+</script>
+
 {% endblock %}
 
 {##}

@@ -1,7 +1,7 @@
 from flask import Blueprint, render_template, session
 
 from app.utils.chess_api import get_current_elo
-from config import LOIC_USERNAME
+from config import CHESS_MAPPING, LOIC_USERNAME
 
 
 errors = Blueprint('errors', __name__)
@@ -17,5 +17,6 @@ def page_not_found(e):
             get_current_elo(
                 session.get('selected_chess_com_tag', LOIC_USERNAME)
             )
-        )
+        ),
+        assets=list(CHESS_MAPPING.keys())
     ), 404

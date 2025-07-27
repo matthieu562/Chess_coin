@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" xmlns="http://www.w3.org/1999/html">
 
 <head>
 
@@ -191,6 +191,25 @@
                     <button id="sidebarToggleTop" class="btn btn-link d-md-none rounded-circle mr-3">
                         <i class="fa fa-bars"></i>
                     </button>
+
+                    <div class="ml-2 my-auto">
+                        <form method="post" id="topbarAssetForm" class="mb-0">
+                            <div class="d-flex align-items-center border-left-primary rounded shadow-sm px-2"
+                                 style="height: 48px; background-color: #f8f9fc; min-width: 100px; max-width: 180px;">
+
+                                <select class="form-control form-control-sm border-0 bg-transparent text-dark font-weight-bold p-0"
+                                        id="topbarAssetSelect"
+                                        style="font-size: 0.85rem;">
+                                    {% for asset in assets %}
+                                        <option value="{{ asset }}" {% if asset == session['selected_asset'] %}selected{% endif %}>
+                                            {{ asset }}
+                                        </option>
+                                    {% endfor %}
+                                </select>
+
+                            </div>
+                        </form>
+                    </div>
 
                     <!--&lt;!&ndash; Topbar Search &ndash;&gt;
                     <form
@@ -423,7 +442,7 @@
                                             <div class="text-xs font-weight-bold text-primary text-uppercase mb-1">
                                                 ELO Rapid
                                             </div>
-                                            <div class="h5 mb-0 font-weight-bold text-gray-800">
+                                            <div class="h5 mb-0 font-weight-bold text-gray-800" id="eloRapid">
                                                 {{ elo_rapid }}
                                             </div>
                                         </div>
@@ -511,7 +530,7 @@
                                 <!-- Card Header - Dropdown -->
                                 <div
                                     class="card-header py-3 d-flex flex-row align-items-center justify-content-between">
-                                    <h6 class="m-0 font-weight-bold text-primary"> History of Loïc Coin over time </h6>
+                                    <h6 class="m-0 font-weight-bold text-primary"> History of <span id="selected-coin"> Loïc_Coin </span> over time </h6>
 {#                                    <div class="dropdown no-arrow">#}
 {#                                        <a class="dropdown-toggle" href="#" role="button" id="dropdownMenuLink"#}
 {#                                            data-toggle="dropdown" aria-haspopup="true" aria-expanded="false">#}
@@ -531,7 +550,9 @@
                                 <div class="card-body">
                                     <div class="chart-area" style="width: 100%; height: auto;">
 {#                                        <div id="chart" class="chart" style="height:100%; width:100%"></div>#}
-                                        {{ div | safe }}
+                                        <div id="bokeh-container">
+                                            {{ div | safe }}
+                                        </div>
                                         <!--<canvas id="myAreaChart"></canvas>-->
                                     </div>
                                 </div>
@@ -802,7 +823,9 @@
     <script src="{{ cdn_js }}"></script>
 
     <!-- Script pour insérer le graphique -->
-    {{ script | safe }}
+    <div id="bokeh-script">
+        {{ script | safe }}
+    </div>
 
     <script>
         // Masquer la sidebar par défaut uniquement si écran < 768px
@@ -810,6 +833,70 @@
             if (window.innerWidth < 768) {
                 document.body.classList.add('sidebar-toggled');
                 document.querySelector('.sidebar').classList.add('toggled');
+            }
+        });
+    </script>
+
+    <script>
+        document.addEventListener("DOMContentLoaded", function () {
+            const topbarSelect = document.getElementById("topbarAssetSelect");
+
+            // Synchronise le topbar vers le formulaire
+            if (topbarSelect) {
+                topbarSelect.addEventListener("change", function () {
+                    const selected = this.value;
+
+                    // Optionnel : mise à jour serveur si nécessaire
+                    fetch('/update_selected_asset_for_home', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json'
+                        },
+                        body: JSON.stringify({ asset: selected })
+                    })
+                    .then(res => res.json())
+                    .then(data => {
+                        if (data.status === 'ok') {
+                            // 1. Met à jour l'ELO
+                            if (data.elo_rapid) {
+                                const eloElement = document.getElementById("eloRapid");
+                                if (eloElement) eloElement.textContent = data.elo_rapid;
+                            }
+
+                            // 2. Met à jour l'Asset sélectionné
+                            if (data.selected) {
+                                const assetElement = document.getElementById("selected-coin");
+                                if (assetElement) assetElement.textContent = data.selected;
+                            }
+
+                            // Met à jour le div du graphique
+                            const graphDiv = document.getElementById("bokeh-container");
+                            graphDiv.innerHTML = data.div;
+
+                            // Supprime le vieux script si présent
+                            const oldScript = document.getElementById("bokeh-dynamic-script");
+                            if (oldScript) oldScript.remove();
+
+                            // Crée un nouveau script à partir du contenu du <script> renvoyé
+                            const tempDiv = document.createElement('div');
+                            tempDiv.innerHTML = data.script;
+
+                            const scriptTag = tempDiv.querySelector('script');
+                            if (scriptTag) {
+                                const newScript = document.createElement('script');
+                                newScript.id = "bokeh-dynamic-script";
+                                newScript.textContent = scriptTag.textContent;
+                                document.body.appendChild(newScript);
+                            }
+                        }
+                    })
+                    .catch(err => {
+                        console.error("Error fetching graph update:", err);
+                    });
+
+                    // Facultatif : soumettre le formulaire topbar si nécessaire
+                    // document.getElementById("topbarAssetForm").submit();
+                });
             }
         });
     </script>
