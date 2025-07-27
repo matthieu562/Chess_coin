@@ -76,32 +76,55 @@ function submitTrade(type) {
 </script>
 
 <script>
-document.addEventListener("DOMContentLoaded", function() {
-    const assetSelect = document.querySelector('select[name="asset"]');
+    document.addEventListener("DOMContentLoaded", function () {
+        const topbarSelect = document.getElementById("topbarAssetSelect");
+        const formSelect = document.querySelector('select[name="asset"]');
 
-    if (assetSelect) {
-        assetSelect.addEventListener('change', function() {
-            const selectedAsset = this.value;
+        // Synchronise le topbar vers le formulaire
+        if (topbarSelect && formSelect) {
+            topbarSelect.addEventListener("change", function () {
+                const selected = this.value;
+                formSelect.value = selected;
 
-            fetch('/update_selected_asset', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    {#'X-CSRFToken': '{{ csrf_token() }}'  // Seulement si tu utilises Flask-WTF avec CSRF protection#}
-                },
-                body: JSON.stringify({ asset: selectedAsset })
-            })
-            .then(response => response.json())
-            .then(data => {
-                console.log('Server response :', data);
-                if (data.status === 'ok') {
-                    // Update ELO on the page
-                    document.getElementById('eloRapid').textContent = data.elo_rapid;
-                }
+                // Optionnel : mise à jour serveur si nécessaire
+                fetch('/update_selected_asset', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ asset: selected })
+                })
+                .then(res => res.json())
+                .then(data => {
+                    if (data.elo_rapid) {
+                        document.getElementById("eloRapid").textContent = data.elo_rapid;
+                    }
+                });
+
+                // Facultatif : soumettre le formulaire topbar si nécessaire
+                // document.getElementById("topbarAssetForm").submit();
             });
-        });
-    }
-});
+
+            // Synchronise le formulaire vers le topbar
+            formSelect.addEventListener("change", function () {
+                topbarSelect.value = this.value;
+
+                fetch('/update_selected_asset', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ asset: this.value })
+                })
+                .then(res => res.json())
+                .then(data => {
+                    if (data.elo_rapid) {
+                        document.getElementById("eloRapid").textContent = data.elo_rapid;
+                    }
+                });
+            });
+        }
+    });
 </script>
 
 <!-- Positions Table -->

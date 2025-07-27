@@ -5,9 +5,6 @@ from datetime import datetime, timezone
 from chessdotcom import get_player_stats, Client, get_player_game_archives, get_player_games_by_month
 
 
-from config import LOIC_USERNAME
-
-
 def _init_chesscom_request():
     Client.request_config['headers']['User-Agent'] = 'my-app'
 

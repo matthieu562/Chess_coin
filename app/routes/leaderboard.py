@@ -2,7 +2,7 @@ from flask import Blueprint, render_template, session
 
 from app.models import User
 from app.utils.chess_api import get_current_elo
-from config import LOIC_USERNAME
+from config import CHESS_MAPPING, LOIC_USERNAME
 
 
 leaderboard = Blueprint('leaderboard', __name__)
@@ -41,5 +41,6 @@ def leaderboard_page():
                 session.get('selected_chess_com_tag', LOIC_USERNAME)
             )
         ),
-        leaderboard=ranked
+        leaderboard=ranked,
+        assets=list(CHESS_MAPPING.keys())
     )
